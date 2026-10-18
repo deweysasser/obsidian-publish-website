@@ -43,3 +43,25 @@ func TestUnknownTransformFailsBeforeOutput(t *testing.T) {
 		t.Error("output written")
 	}
 }
+
+type redactContext struct{}
+
+func (redactContext) Name() string { return "redact-context" }
+func (redactContext) Apply(p *render.Page) error {
+	p.Markdown = strings.ReplaceAll(p.Markdown, "Context", "REDACTED")
+	return nil
+}
+
+func TestTransformsFeedHTMLAndTOC(t *testing.T) {
+	transform.Register("redact-context", func() transform.Transform { return redactContext{} })
+	out := t.TempDir()
+	cfg := fixtureConfig(out, "html")
+	cfg.Transforms = []string{"redact-context"}
+	if _, err := Run(cfg, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	page := read(t, filepath.Join(out, "issues/road-repair/index.html"))
+	if strings.Contains(page, "Context") || !strings.Contains(page, `href="#redacted"`) {
+		t.Errorf("transform did not reach HTML/TOC:\n%s", page)
+	}
+}

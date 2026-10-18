@@ -28,7 +28,8 @@ type Page struct {
 
 var h1Re = regexp.MustCompile(`^#\s+(.+?)\s*#*\s*$`)
 
-// Render renders one published note.
+// Render renders one published note to target Markdown. Call Finish (after
+// any transforms) to produce HTML.
 func (r *Renderer) Render(p string) (*Page, error) {
 	ip := r.Ix.Pages[p]
 	slug, ok := r.Pub.Pages[p]
@@ -52,18 +53,26 @@ func (r *Renderer) Render(p string) (*Page, error) {
 		return nil, fmt.Errorf("%s: %w", p, err)
 	}
 	page.Markdown = mdText
-	if r.Mode == ModeHTML {
-		page.HTML, page.TOC, err = r.MarkdownToHTML(mdText)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", p, err)
-		}
-	}
 	for _, src := range ip.Inlinks {
 		if r.Pub.IsPublished(src) {
 			page.Backlinks = append(page.Backlinks, r.Res.Note(src, "", ""))
 		}
 	}
 	return page, nil
+}
+
+// Finish derives HTML and the TOC from the (possibly transformed) Markdown.
+// Call it after transforms; it is a no-op outside ModeHTML.
+func (r *Renderer) Finish(page *Page) error {
+	if r.Mode != ModeHTML {
+		return nil
+	}
+	var err error
+	page.HTML, page.TOC, err = r.MarkdownToHTML(page.Markdown)
+	if err != nil {
+		return fmt.Errorf("%s: %w", page.SourcePath, err)
+	}
+	return nil
 }
 
 // liftH1 removes a leading "# Title" line (keeping line numbering intact).

@@ -27,7 +27,7 @@ func TestMarkdownToHTML(t *testing.T) {
 
 func TestRenderPageTitleAndBacklinks(t *testing.T) {
 	r, _ := fixtureRenderer(t)
-	p, err := r.Render("Town/Issues/Road Repair.md")
+	p, err := renderFull(r, "Town/Issues/Road Repair.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestRenderPageTitleAndBacklinks(t *testing.T) {
 		t.Errorf("tags %v", p.Tags)
 	}
 
-	m, err := r.Render("Town/Videos/2026-08-19 - Meeting.md")
+	m, err := renderFull(r, "Town/Videos/2026-08-19 - Meeting.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestRenderFrontmatterTitle(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "Town/x.md", "---\ntitle: Custom\n---\n# Heading\nbody")
 	r, _ := newTestRenderer(t, dir, ModeHTML)
-	p, err := r.Render("Town/x.md")
+	p, err := renderFull(r, "Town/x.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestRenderFrontmatterTitle(t *testing.T) {
 
 func TestRenderMarkdownModeHasNoHTML(t *testing.T) {
 	r, _ := newTestRenderer(t, "../../testdata/fixture-vault", ModeMarkdown)
-	p, err := r.Render("Town/Issues/Road Repair.md")
+	p, err := renderFull(r, "Town/Issues/Road Repair.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,14 +86,14 @@ func TestTitleNotLiftedFromComment(t *testing.T) {
 	writeFile(t, dir, "Town/x.md", "%%\n# Secret Title\n%%\nbody")
 	writeFile(t, dir, "Town/y.md", "# Real %% hidden %%\nbody")
 	r, _ := newTestRenderer(t, dir, ModeHTML)
-	p, err := r.Render("Town/x.md")
+	p, err := renderFull(r, "Town/x.md")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if p.Title != "x" || strings.Contains(p.HTML, "Secret") {
 		t.Errorf("title %q html %q", p.Title, p.HTML)
 	}
-	p, _ = r.Render("Town/y.md")
+	p, _ = renderFull(r, "Town/y.md")
 	if strings.Contains(p.Title+p.HTML, "hidden") {
 		t.Errorf("title %q html %q", p.Title, p.HTML)
 	}

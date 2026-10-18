@@ -94,6 +94,9 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 		if err := transform.Apply(transforms, page); err != nil {
 			return nil, err
 		}
+		if err := r.Finish(page); err != nil {
+			return nil, err
+		}
 		site.Pages = append(site.Pages, page)
 		for _, tg := range page.Tags {
 			k := strings.ToLower(tg) // #Project and #project share one tag page

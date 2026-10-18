@@ -33,7 +33,7 @@ func withDataview(t *testing.T, r *Renderer) {
 func TestCurrentIssuesRendered(t *testing.T) {
 	r, warns := fixtureRenderer(t)
 	withDataview(t, r)
-	p, err := r.Render("Town/Current Issues.md")
+	p, err := renderFull(r, "Town/Current Issues.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestInlineAndUnsupportedAndErrors(t *testing.T) {
 	writeFile(t, dir, "Town/b.md", "b")
 	r, warns := newTestRenderer(t, dir, ModeHTML)
 	withDataview(t, r)
-	p, err := r.Render("Town/a.md")
+	p, err := renderFull(r, "Town/a.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestInlineAndUnsupportedAndErrors(t *testing.T) {
 func TestDataviewDisabled(t *testing.T) {
 	r, warns := fixtureRenderer(t)
 	r.DisableDataview()
-	p, err := r.Render("Town/Current Issues.md")
+	p, err := renderFull(r, "Town/Current Issues.md")
 	if err != nil {
 		t.Fatal(err)
 	}

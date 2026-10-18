@@ -59,3 +59,12 @@ func writeFile(t *testing.T, dir, rel, body string) {
 		t.Fatal(err)
 	}
 }
+
+// renderFull renders a page and derives its HTML, as the build does.
+func renderFull(r *Renderer, p string) (*Page, error) {
+	pg, err := r.Render(p)
+	if err == nil {
+		err = r.Finish(pg)
+	}
+	return pg, err
+}
