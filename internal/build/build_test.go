@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/deweysasser/obsidian-publish-website/internal/config"
+	"github.com/deweysasser/obsidian-publish-website/internal/dataview"
 	"github.com/deweysasser/obsidian-publish-website/internal/search"
 	"github.com/rs/zerolog"
 )
@@ -17,6 +18,9 @@ const fixtureVault = "../../testdata/fixture-vault"
 func fixtureConfig(out, target string) *config.Config {
 	c := &config.Config{Vault: fixtureVault, Root: "Town", Exclude: []string{"People/**"},
 		Target: target, Output: out, Search: "none", Site: config.Site{Title: "T", BaseURL: "https://x.io/c/"}}
+	if _, err := dataview.FindNode(); err != nil {
+		c.Dataview = "none" // keep confidentiality and layout tests running without Node
+	}
 	c.ApplyDefaults()
 	return c
 }
@@ -31,6 +35,7 @@ func read(t *testing.T, p string) string {
 }
 
 func TestBuildHTMLFixture(t *testing.T) {
+	requireNode(t)
 	out := t.TempDir()
 	rep, err := Run(fixtureConfig(out, "html"), zerolog.Nop())
 	if err != nil {

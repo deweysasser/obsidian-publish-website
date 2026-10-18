@@ -33,6 +33,9 @@ func read(t *testing.T, p string) string {
 }
 
 func TestJekyllExport(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node not on PATH")
+	}
 	out := t.TempDir()
 	buildFixture(t, out, "https://x.io/blog/")
 	for _, f := range []string{"_town/index.md", "_town/issues/index.md", "_town/issues/road-repair.md", "assets/town/img/photo.png", "_config.obsidian-publish.yml"} {
@@ -72,6 +75,9 @@ func TestJekyllRawEscape(t *testing.T) {
 }
 
 func TestJekyllBuildsSite(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node not on PATH")
+	}
 	jekyll, err := exec.LookPath("jekyll")
 	if err != nil {
 		t.Skip("jekyll not on PATH")

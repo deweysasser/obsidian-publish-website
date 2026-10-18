@@ -33,6 +33,9 @@ func read(t *testing.T, p string) string {
 }
 
 func TestHugoExport(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node not on PATH")
+	}
 	out := t.TempDir()
 	buildFixture(t, out)
 	for _, f := range []string{"content/town/_index.md", "content/town/issues/_index.md", "content/town/issues/road-repair/index.md",
@@ -88,6 +91,9 @@ func TestHugoRefusesForeignContent(t *testing.T) {
 }
 
 func TestHugoBuildsSite(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node not on PATH")
+	}
 	hugo, err := exec.LookPath("hugo")
 	if err != nil {
 		t.Skip("hugo not on PATH")

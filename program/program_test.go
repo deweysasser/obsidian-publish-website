@@ -1,6 +1,7 @@
 package program
 
 import (
+	"os/exec"
 	"path/filepath"
 
 	"github.com/rs/zerolog"
@@ -51,6 +52,9 @@ func TestBuildCommandRejectsBadTarget(t *testing.T) {
 }
 
 func TestBuildCommandRun(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node not on PATH")
+	}
 	dir := t.TempDir()
 	vault, _ := filepath.Abs("../testdata/fixture-vault")
 	cfg := filepath.Join(dir, "publish.yaml")
