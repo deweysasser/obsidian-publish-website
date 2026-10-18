@@ -49,7 +49,7 @@ func TestNoteEmbeds(t *testing.T) {
 	}
 	got = pre(t, r, "![[2026-08-19 - Meeting]]")
 	// links inside embedded content resolve relative to the embedded note
-	if !strings.Contains(got, "[Road Repair > Context](</c/issues/road-repair/#context>)") || !strings.Contains(got, "follow up") {
+	if !strings.Contains(got, "[Road Repair > Context](/c/issues/road-repair/#context)") || !strings.Contains(got, "follow up") {
 		t.Errorf("whole embed:\n%s", got)
 	}
 }

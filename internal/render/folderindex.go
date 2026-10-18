@@ -28,10 +28,10 @@ func (r *Renderer) FolderListing(folder string) string {
 	sort.Slice(pages, less(pages))
 	var b strings.Builder
 	for _, e := range folders {
-		b.WriteString("- 📁 [" + mdEscaper.Replace(e.name) + "](<" + e.url + ">)\n")
+		b.WriteString("- 📁 [" + mdEscaper.Replace(e.name) + "](" + e.url + ")\n")
 	}
 	for _, e := range pages {
-		b.WriteString("- [" + mdEscaper.Replace(e.name) + "](<" + e.url + ">)\n")
+		b.WriteString("- [" + mdEscaper.Replace(e.name) + "](" + e.url + ")\n")
 	}
 	return b.String()
 }

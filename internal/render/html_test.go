@@ -76,7 +76,7 @@ func TestRenderMarkdownModeHasNoHTML(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.HTML != "" || !strings.Contains(p.Markdown, "[2026-08-19 - Meeting](</c/videos/2026-08-19-meeting/>)") {
+	if p.HTML != "" || !strings.Contains(p.Markdown, "[2026-08-19 - Meeting](/c/videos/2026-08-19-meeting/)") {
 		t.Errorf("markdown mode page %+v", p)
 	}
 }

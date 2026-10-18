@@ -198,5 +198,5 @@ func (r *Renderer) link(l index.Link, line int, ctx Context) string {
 	if !res.Published {
 		return mdEscaper.Replace(res.Text)
 	}
-	return "[" + mdEscaper.Replace(res.Text) + "](<" + res.URL + ">)"
+	return "[" + mdEscaper.Replace(res.Text) + "](" + res.URL + ")"
 }

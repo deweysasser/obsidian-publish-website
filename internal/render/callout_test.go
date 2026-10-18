@@ -8,7 +8,7 @@ import (
 func TestCallouts(t *testing.T) {
 	r, _ := fixtureRenderer(t)
 	got := pre(t, r, "> [!note] Hi [[Road Repair]]\n> body [[Road Repair]]\n\nafter")
-	want := "<div class=\"callout\" data-callout=\"note\">\n<div class=\"callout-title\">\n\nHi [Road Repair](</c/issues/road-repair/>)\n\n</div>\n<div class=\"callout-content\">\n\nbody [Road Repair](</c/issues/road-repair/>)\n\n</div>\n</div>\n\nafter"
+	want := "<div class=\"callout\" data-callout=\"note\">\n<div class=\"callout-title\">\n\nHi [Road Repair](/c/issues/road-repair/)\n\n</div>\n<div class=\"callout-content\">\n\nbody [Road Repair](/c/issues/road-repair/)\n\n</div>\n</div>\n\nafter"
 	if got != want {
 		t.Errorf("got\n%s\nwant\n%s", got, want)
 	}
@@ -32,7 +32,7 @@ func TestCalloutNestedAndPlainQuote(t *testing.T) {
 	if strings.Count(got, "class=\"callout\"") != 2 || !strings.Contains(got, `data-callout="warning"`) || strings.Contains(got, "> inner") {
 		t.Errorf("got\n%s", got)
 	}
-	if got := pre(t, r, "> quote [[Road Repair]]"); got != "> quote [Road Repair](</c/issues/road-repair/>)" {
+	if got := pre(t, r, "> quote [[Road Repair]]"); got != "> quote [Road Repair](/c/issues/road-repair/)" {
 		t.Errorf("plain quote %q", got)
 	}
 }

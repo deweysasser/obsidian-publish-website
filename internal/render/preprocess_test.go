@@ -7,9 +7,9 @@ import (
 
 func TestPreprocess(t *testing.T) {
 	cases := []struct{ in, want string }{
-		{"[[Road Repair]]", "[Road Repair](</c/issues/road-repair/>)"},
-		{"[[Road Repair|the road]]", "[the road](</c/issues/road-repair/>)"},
-		{"[[Road Repair#Context]]", "[Road Repair > Context](</c/issues/road-repair/#context>)"},
+		{"[[Road Repair]]", "[Road Repair](/c/issues/road-repair/)"},
+		{"[[Road Repair|the road]]", "[the road](/c/issues/road-repair/)"},
+		{"[[Road Repair#Context]]", "[Road Repair > Context](/c/issues/road-repair/#context)"},
 		{"[[Alice Smith]] and [[Bob (Elm St)|Bob]]", "Alice Smith and Bob"},
 		{"==hi== there", "<mark>hi</mark> there"},
 		{"a %%secret%% b", "a  b"},
@@ -18,12 +18,12 @@ func TestPreprocess(t *testing.T) {
 		{"see [due:: 2026-10-01]", `see <span class="inline-field"><span class="if-key">due</span><span class="if-val">2026-10-01</span></span>`},
 		{"see (due:: 2026-10-01)", `see <span class="inline-field"><span class="if-val">2026-10-01</span></span>`},
 		{"priority:: 2", "**priority**: 2"},
-		{"[Road](Issues/Road%20Repair.md)", "[Road](</c/issues/road-repair/>)"},
+		{"[Road](Issues/Road%20Repair.md)", "[Road](/c/issues/road-repair/)"},
 		{"[x](https://e.com)", "[x](https://e.com)"},
 		{"para ^blk9", `para <span class="block-id" id="block-blk9"></span>`},
-		{"[[Café Permit]]", "[Café Permit](</c/issues/caf%C3%A9-permit/>)"},
-		{"[[Road Repair|a *c* <b>]]", `[a \*c\* \<b>](</c/issues/road-repair/>)`},
-		{"[[#Context]]", "[Context](</c/#context>)"},
+		{"[[Café Permit]]", "[Café Permit](/c/issues/caf%C3%A9-permit/)"},
+		{"[[Road Repair|a *c* <b>]]", `[a \*c\* \<b>](/c/issues/road-repair/)`},
+		{"[[#Context]]", "[Context](/c/#context)"},
 	}
 	for _, c := range cases {
 		r, _ := fixtureRenderer(t)
