@@ -60,7 +60,7 @@ func TestRunFixtureQueries(t *testing.T) {
 	e := needNode(t)
 	ix := fixture(t)
 	origin := "Town/Current Issues.md"
-	res, err := e.Run(FilesFromIndex(ix), []Request{
+	res, err := e.Run(FilesFromIndex(ix, nil), []Request{
 		{ID: "open", Kind: "query", Origin: origin, Source: `TABLE WITHOUT ID file.link AS Issue, board AS Board, last_updated AS "Last updated", length(Involved) AS People
 FROM "Town/Issues" WHERE status = "open" SORT last_updated DESC`},
 		{ID: "group", Kind: "query", Origin: origin, Source: `TABLE WITHOUT ID status AS Status, length(rows) AS Count, rows.file.link AS Issues FROM "Town/Issues" WHERE status GROUP BY status SORT status ASC`},

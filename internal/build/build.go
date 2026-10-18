@@ -159,7 +159,11 @@ func evaluateDataview(cfg *config.Config, r *render.Renderer, ix *index.Index, l
 		r.MaxEmbedDepth = int(d)
 	}
 	start := time.Now()
-	res, err := dataview.NewEngine(node, settings, ix).RunIndex(reqs)
+	var include func(string) bool
+	if cfg.DataviewScope != "vault" {
+		include = r.Pub.IsPublished
+	}
+	res, err := dataview.NewEngine(node, settings, ix, include).RunIndex(reqs)
 	if err != nil {
 		return err
 	}

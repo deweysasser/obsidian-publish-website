@@ -33,18 +33,22 @@ type HTML struct {
 }
 
 type Config struct {
-	Vault      string   `yaml:"vault"`
-	Root       string   `yaml:"root"`
-	Exclude    []string `yaml:"exclude"`
-	Target     string   `yaml:"target"`
-	Output     string   `yaml:"output"`
-	Search     string   `yaml:"search"`
-	Dataview   string   `yaml:"dataview"`
-	Site       Site     `yaml:"site"`
-	Hugo       Hugo     `yaml:"hugo"`
-	Jekyll     Jekyll   `yaml:"jekyll"`
-	HTML       HTML     `yaml:"html"`
-	Transforms []string `yaml:"transforms"`
+	Vault    string   `yaml:"vault"`
+	Root     string   `yaml:"root"`
+	Exclude  []string `yaml:"exclude"`
+	Target   string   `yaml:"target"`
+	Output   string   `yaml:"output"`
+	Search   string   `yaml:"search"`
+	Dataview string   `yaml:"dataview"`
+	// DataviewScope is the set of notes queries can read: "published" (default)
+	// or "vault" (every note, including excluded ones — their fields and task
+	// text can then appear in query results).
+	DataviewScope string   `yaml:"dataview_scope"`
+	Site          Site     `yaml:"site"`
+	Hugo          Hugo     `yaml:"hugo"`
+	Jekyll        Jekyll   `yaml:"jekyll"`
+	HTML          HTML     `yaml:"html"`
+	Transforms    []string `yaml:"transforms"`
 	// ExportFrontmatter copies each note's frontmatter under an "obsidian"
 	// key in hugo/jekyll exports. Off by default: properties often hold data
 	// that is not meant to be published.
@@ -96,6 +100,9 @@ func (c *Config) ApplyDefaults() {
 	if c.Dataview == "" {
 		c.Dataview = "node"
 	}
+	if c.DataviewScope == "" {
+		c.DataviewScope = "published"
+	}
 	c.Root = strings.Trim(c.Root, "/")
 	if c.Hugo.Section == "" {
 		c.Hugo.Section = simpleSlug(path.Base(c.Root))
@@ -129,6 +136,11 @@ func (c *Config) Validate() error {
 	case "node", "none", "":
 	default:
 		errs = append(errs, fmt.Errorf("dataview %q must be node or none", c.Dataview))
+	}
+	switch c.DataviewScope {
+	case "published", "vault", "":
+	default:
+		errs = append(errs, fmt.Errorf("dataview_scope %q must be published or vault", c.DataviewScope))
 	}
 	for _, g := range c.Exclude {
 		if !doublestar.ValidatePattern(g) {

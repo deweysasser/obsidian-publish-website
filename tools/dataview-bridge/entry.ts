@@ -18,6 +18,7 @@ interface Request {
     settings?: Partial<QuerySettings>;
     files: InFile[];
     attachments: string[];
+    paths?: string[]; // notes outside the query scope: link targets only
     aliases: Record<string, string>;
     requests: { id: string; kind: "query" | "inline"; origin: string; source: string }[];
 }
@@ -141,7 +142,7 @@ function encodeGrouping(g: any, settings: QuerySettings): any {
 async function main() {
     const req: Request = JSON.parse(fs.readFileSync(0, "utf8"));
     const settings: QuerySettings = { ...DEFAULT_QUERY_SETTINGS, ...(req.settings ?? {}) };
-    const allPaths = [...req.files.map(f => f.path), ...req.attachments];
+    const allPaths = [...req.files.map(f => f.path), ...req.attachments, ...(req.paths ?? [])];
     const vault = buildVault(allPaths);
     const resolve = makeResolver(allPaths, req.aliases ?? {});
     const resolvedLinks: Record<string, Record<string, number>> = {};

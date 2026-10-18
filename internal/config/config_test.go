@@ -27,7 +27,7 @@ func TestLoadDefaultsAndTilde(t *testing.T) {
 	if c.Vault != filepath.Join(home, "v") {
 		t.Errorf("vault %q", c.Vault)
 	}
-	if c.Target != "html" || c.Search != "pagefind" || c.Dataview != "node" {
+	if c.Target != "html" || c.Search != "pagefind" || c.Dataview != "node" || c.DataviewScope != "published" {
 		t.Errorf("defaults %+v", c)
 	}
 	if c.Output != filepath.Join(filepath.Dir(p), "site") {
@@ -74,6 +74,7 @@ func TestValidate(t *testing.T) {
 		{"bad target", func(c *Config) { c.Target = "pdf" }, "target"},
 		{"bad search", func(c *Config) { c.Search = "lunr" }, "search"},
 		{"bad dataview", func(c *Config) { c.Dataview = "go" }, "dataview"},
+		{"bad scope", func(c *Config) { c.DataviewScope = "all" }, "dataview_scope"},
 		{"absolute root", func(c *Config) { c.Root = "/x" }, "root"},
 		{"dotdot root", func(c *Config) { c.Root = "a/../../b" }, "root"},
 		{"bad glob", func(c *Config) { c.Exclude = []string{"[a"} }, "exclude"},

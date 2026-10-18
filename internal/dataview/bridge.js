@@ -12727,7 +12727,7 @@ function encodeGrouping(g, settings) {
 async function main() {
   const req = JSON.parse(fs.readFileSync(0, "utf8"));
   const settings = { ...DEFAULT_QUERY_SETTINGS, ...req.settings ?? {} };
-  const allPaths = [...req.files.map((f) => f.path), ...req.attachments];
+  const allPaths = [...req.files.map((f) => f.path), ...req.attachments, ...req.paths ?? []];
   const vault = buildVault(allPaths);
   const resolve = makeResolver(allPaths, req.aliases ?? {});
   const resolvedLinks = {};

@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/deweysasser/obsidian-publish-website/internal/index"
+	"github.com/deweysasser/obsidian-publish-website/internal/mdscan"
 	"github.com/deweysasser/obsidian-publish-website/internal/obsmeta"
 )
 
@@ -80,6 +81,7 @@ type Input struct {
 	Settings    map[string]any    `json:"settings"`
 	Files       []File            `json:"files"`
 	Attachments []string          `json:"attachments"`
+	Paths       []string          `json:"paths"` // other notes: resolvable link targets with no data
 	Aliases     map[string]string `json:"aliases"`
 	Requests    []Request         `json:"requests"`
 }
@@ -89,6 +91,7 @@ type Engine struct {
 	Node     string
 	Settings map[string]any
 	ix       *index.Index
+	include  func(string) bool
 }
 
 var nodeVersionRe = regexp.MustCompile(`^v(\d+)\.`)
@@ -129,27 +132,37 @@ func LoadSettings(vaultRoot string) (map[string]any, error) {
 	return s, nil
 }
 
-// FilesFromIndex converts every vault note into bridge input.
-func FilesFromIndex(ix *index.Index) []File {
+// FilesFromIndex converts the notes accepted by include (nil = all) into
+// bridge input. Content has CRLF normalized and %% comments blanked so
+// Dataview never parses fields from comments.
+func FilesFromIndex(ix *index.Index, include func(string) bool) []File {
 	var out []File
 	for _, p := range ix.Paths {
+		if include != nil && !include(p) {
+			continue
+		}
 		n := ix.Pages[p].Note
-		out = append(out, File{Path: p, Content: string(n.Raw), Ctime: n.Ctime.UnixMilli(), Mtime: n.Mtime.UnixMilli(),
+		out = append(out, File{Path: p, Content: mdscan.BlankComments(n.Raw), Ctime: n.Ctime.UnixMilli(), Mtime: n.Mtime.UnixMilli(),
 			Size: n.Size, Metadata: obsmeta.Build(n)})
 	}
 	return out
 }
 
-// NewEngine creates an engine for the index.
-func NewEngine(node string, settings map[string]any, ix *index.Index) *Engine {
-	return &Engine{Node: node, Settings: settings, ix: ix}
+// NewEngine creates an engine over the notes accepted by include (nil = the
+// whole vault). Other notes stay resolvable as link targets but expose no data.
+func NewEngine(node string, settings map[string]any, ix *index.Index, include func(string) bool) *Engine {
+	return &Engine{Node: node, Settings: settings, ix: ix, include: include}
 }
 
 // RunIndex evaluates requests against the engine's index.
 func (e *Engine) RunIndex(reqs []Request) (map[string]Result, error) {
-	in := Input{Settings: e.Settings, Files: FilesFromIndex(e.ix), Aliases: map[string]string{}, Requests: reqs}
+	in := Input{Settings: e.Settings, Files: FilesFromIndex(e.ix, e.include), Aliases: map[string]string{}, Requests: reqs}
 	in.Attachments = e.ix.Vault.Attachments
 	for _, p := range e.ix.Paths {
+		if e.include != nil && !e.include(p) {
+			in.Paths = append(in.Paths, p)
+			continue // aliases of hidden notes are not exposed
+		}
 		for _, a := range e.ix.Pages[p].Aliases {
 			k := strings.ToLower(a)
 			if _, dup := in.Aliases[k]; !dup {
@@ -169,6 +182,9 @@ func (e *Engine) run(in Input) (map[string]Result, error) {
 	if in.Attachments == nil {
 		in.Attachments = []string{}
 	}
+	if in.Paths == nil {
+		in.Paths = []string{}
+	}
 	if in.Settings == nil {
 		in.Settings = map[string]any{}
 	}
@@ -176,7 +192,9 @@ func (e *Engine) run(in Input) (map[string]Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	f, err := os.CreateTemp("", "obsidian-publish-dataview-*.js")
+	// .cjs: a stray package.json with "type":"module" in TMPDIR must not
+	// change how Node loads the CommonJS bundle.
+	f, err := os.CreateTemp("", "obsidian-publish-dataview-*.cjs")
 	if err != nil {
 		return nil, err
 	}

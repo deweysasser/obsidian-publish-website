@@ -48,7 +48,7 @@ func TestSmokeRealVault(t *testing.T) {
 		}
 	}
 	settings, _ := dataview.LoadSettings(root)
-	res, err := dataview.NewEngine(node, settings, ix).RunIndex(reqs)
+	res, err := dataview.NewEngine(node, settings, ix, nil).RunIndex(reqs)
 	if err != nil {
 		t.Fatal(err)
 	}

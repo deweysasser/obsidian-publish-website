@@ -63,3 +63,18 @@ func TestInlineDisplayMath(t *testing.T) {
 		t.Errorf("got %#v", got)
 	}
 }
+
+func TestBlankComments(t *testing.T) {
+	cases := map[string]string{
+		"a %%x:: 1%% b\n":           "a           b\n",
+		"a\n%%\nk:: v\n%%\nb":       "a\n  \n     \n  \nb",
+		"`%%` keep %%hide%%":        "`%%` keep         ",
+		"```\n%%code%%\n```\n%%é%%": "```\n%%code%%\n```\n     ",
+		"x\r\ny %%z%%\r\n":          "x\ny      \n",
+	}
+	for in, want := range cases {
+		if got := BlankComments([]byte(in)); got != want {
+			t.Errorf("BlankComments(%q)\n got %q\nwant %q", in, got, want)
+		}
+	}
+}

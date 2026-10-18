@@ -23,7 +23,7 @@ func withDataview(t *testing.T, r *Renderer) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := dataview.NewEngine(node, settings, r.Ix).RunIndex(reqs)
+	res, err := dataview.NewEngine(node, settings, r.Ix, r.Pub.IsPublished).RunIndex(reqs)
 	if err != nil {
 		t.Fatal(err)
 	}
