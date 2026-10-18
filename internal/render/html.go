@@ -25,7 +25,7 @@ type TOCEntry struct {
 
 var md = goldmark.New(
 	goldmark.WithExtensions(extension.GFM, extension.Footnote),
-	goldmark.WithParserOptions(parser.WithAutoHeadingID()),
+	goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(headingIDTransformer{}, 100))),
 	goldmark.WithRendererOptions(
 		ghtml.WithUnsafe(),
 		renderer.WithNodeRenderers(util.Prioritized(&codeRenderer{}, 100)),
@@ -35,8 +35,7 @@ var md = goldmark.New(
 // MarkdownToHTML renders preprocessed markdown and returns the HTML and TOC.
 func (r *Renderer) MarkdownToHTML(src string) (string, []TOCEntry, error) {
 	source := []byte(src)
-	pctx := parser.NewContext(parser.WithIDs(&headingIDs{seen: map[string]bool{}}))
-	doc := md.Parser().Parse(text.NewReader(source), parser.WithContext(pctx))
+	doc := md.Parser().Parse(text.NewReader(source))
 	var toc []TOCEntry
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if h, ok := n.(*ast.Heading); ok && entering {
@@ -76,24 +75,32 @@ func plainText(n ast.Node, src []byte) string {
 	return strings.TrimSpace(b.String())
 }
 
-// headingIDs generates heading ids with resolve.HeadingID so link anchors
-// and rendered ids agree.
-type headingIDs struct{ seen map[string]bool }
+// headingIDTransformer assigns heading ids from the heading's visible text
+// (ignoring HTML produced by preprocessing) with resolve.HeadingID, so link
+// anchors and ids agree. Duplicates get -1, -2 suffixes.
+type headingIDTransformer struct{}
 
-func (h *headingIDs) Generate(value []byte, kind ast.NodeKind) []byte {
-	base := resolve.HeadingID(string(value))
-	if base == "" {
-		base = "heading"
-	}
-	id := base
-	for i := 1; h.seen[id]; i++ {
-		id = base + "-" + strconv.Itoa(i)
-	}
-	h.seen[id] = true
-	return []byte(id)
+func (headingIDTransformer) Transform(doc *ast.Document, reader text.Reader, _ parser.Context) {
+	src := reader.Source()
+	seen := map[string]bool{}
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		h, ok := n.(*ast.Heading)
+		if !ok || !entering {
+			return ast.WalkContinue, nil
+		}
+		base := resolve.HeadingID(plainText(h, src))
+		if base == "" {
+			base = "heading"
+		}
+		id := base
+		for i := 1; seen[id]; i++ {
+			id = base + "-" + strconv.Itoa(i)
+		}
+		seen[id] = true
+		h.SetAttributeString("id", []byte(id))
+		return ast.WalkSkipChildren, nil
+	})
 }
-
-func (h *headingIDs) Put(value []byte) { h.seen[string(value)] = true }
 
 // codeRenderer renders fenced code; mermaid blocks become <pre class="mermaid">.
 type codeRenderer struct{}

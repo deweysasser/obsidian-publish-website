@@ -108,3 +108,20 @@ func TestEmbedIgnoresFrontmatterPercent(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestHeadingIDsIgnoreGeneratedHTML(t *testing.T) {
+	r, _ := fixtureRenderer(t)
+	md := pre(t, r, "## Use ==this==\n\n## Tag #civic here\n\n## Use ==this==\n\nsee [[#Use ==this==]]")
+	h, toc, err := r.MarkdownToHTML(md)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`<h2 id="use-this">`, `<h2 id="tag-civic-here">`, `<h2 id="use-this-1">`, `href="/c/#use-this"`} {
+		if !strings.Contains(h, want) {
+			t.Errorf("missing %s in\n%s", want, h)
+		}
+	}
+	if toc[0].Text != "Use this" || toc[1].Text != "Tag #civic here" {
+		t.Errorf("toc %+v", toc)
+	}
+}
