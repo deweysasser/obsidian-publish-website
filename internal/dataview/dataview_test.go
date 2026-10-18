@@ -16,7 +16,7 @@ func TestDecodeValue(t *testing.T) {
 		`2.5`:  {Kind: KNumber, Num: 2.5},
 		`"s"`:  {Kind: KString, Str: "s"},
 		`{"$date":"2026-09-22T00:00:00.000-04:00","text":"2026-09-22"}`:             {Kind: KDate, Str: "2026-09-22"},
-		`{"$dur":86400000,"text":"1 day"}`:                                          {Kind: KDuration, Str: "1 day"},
+		`{"$dur":86400000,"text":"1 day"}`:                                          {Kind: KDuration, Str: "1 day", Num: 86400000},
 		`{"$link":"a.md","subpath":"H","type":"header","display":"x","embed":true}`: {Kind: KLink, Link: Link{Path: "a.md", Subpath: "H", Type: "header", Display: "x", Embed: true}},
 		`{"$elink":"https://e.com","display":"e"}`:                                  {Kind: KExternalLink, URL: "https://e.com", Str: "e"},
 		`{"$widget":"md"}`: {Kind: KText, Str: "md"},
