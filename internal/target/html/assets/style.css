@@ -116,3 +116,10 @@ li:has(> input[type=checkbox]) > input { margin: 0 .4em 0 -1.3em; }
   .search { width: auto; flex: 1; }
   .page-title { font-size: 1.6rem; }
 }
+.search { position: relative; }
+.search .pagefind-ui__drawer {
+  position: absolute; right: 0; top: calc(100% + .25rem); width: min(38rem, 92vw); max-height: 75vh; overflow-y: auto;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0 1rem; box-shadow: 0 .5rem 2rem rgba(0,0,0,.18);
+}
+.search .pagefind-ui__drawer:not(:has(*)) { display: none; }
+.search { --pagefind-ui-scale: .8; --pagefind-ui-primary: var(--accent); --pagefind-ui-text: var(--fg); --pagefind-ui-background: var(--bg); --pagefind-ui-border: var(--border); --pagefind-ui-tag: var(--bg-alt); }
