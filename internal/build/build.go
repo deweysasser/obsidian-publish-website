@@ -54,7 +54,9 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 		return nil, err
 	}
 	for _, w := range v.Warnings {
-		warn(w)
+		if strings.HasPrefix(w, cfg.Root+"/") { // problems outside the published tree are not ours to report
+			warn(w)
+		}
 	}
 	ix := index.Build(v)
 	pub, err := selector.Select(ix, cfg)

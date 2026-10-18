@@ -117,3 +117,21 @@ func TestBuildMissingRoot(t *testing.T) {
 		t.Fatal("want error")
 	}
 }
+
+func TestWarningsOnlyForPublishedTree(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "R"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "Other"), 0o755)
+	os.WriteFile(filepath.Join(dir, "R", "a.md"), []byte("ok"), 0o644)
+	os.WriteFile(filepath.Join(dir, "R", "bad.md"), []byte("---\n: : :\n---\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "Other", "bad.md"), []byte("---\n: : :\n---\n"), 0o644)
+	cfg := &config.Config{Vault: dir, Root: "R", Output: filepath.Join(t.TempDir(), "o"), Search: "none"}
+	cfg.ApplyDefaults()
+	rep, err := Run(cfg, zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Warnings) != 1 || !strings.HasPrefix(rep.Warnings[0], "R/bad.md") {
+		t.Errorf("warnings %v", rep.Warnings)
+	}
+}
