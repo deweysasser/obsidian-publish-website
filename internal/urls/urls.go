@@ -37,6 +37,9 @@ func (b Basic) PageURL(slug string) string {
 func (b Basic) AssetURL(slug string) string { return b.AssetPrefix + Escape(slug) }
 
 func (b Basic) TagURL(tag string) string {
+	if b.TagPrefix == "" {
+		return ""
+	}
 	return b.TagPrefix + Escape(selector.Slugify(strings.TrimPrefix(tag, "#"))) + "/"
 }
 

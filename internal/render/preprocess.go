@@ -162,7 +162,10 @@ func (r *Renderer) rewriteProse(s string, line int, ctx Context, last bool) stri
 		if len(tags) != 1 {
 			return m
 		}
-		return lead + hold(fmt.Sprintf(`<a class="tag" href="%s">%s</a>`, html.EscapeString(r.URLs.TagURL(tags[0])), html.EscapeString(tags[0])))
+		if u := r.URLs.TagURL(tags[0]); u != "" {
+			return lead + hold(fmt.Sprintf(`<a class="tag" href="%s">%s</a>`, html.EscapeString(u), html.EscapeString(tags[0])))
+		}
+		return lead + hold(`<span class="tag">`+html.EscapeString(tags[0])+`</span>`)
 	})
 	s = index.BracketFieldRe.ReplaceAllString(s, `<span class="inline-field"><span class="if-key">$1</span><span class="if-val">$2</span></span>`)
 	s = index.ParenFieldRe.ReplaceAllString(s, `<span class="inline-field"><span class="if-val">$2</span></span>`)

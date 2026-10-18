@@ -44,7 +44,7 @@ func TestHugoExport(t *testing.T) {
 		t.Error("people exported")
 	}
 	rr := read(t, filepath.Join(out, "content/town/issues/road-repair/index.md"))
-	for _, want := range []string{"title: Road Repair\n", "url: /town/issues/road-repair/\n", "tags:\n    - civic-roads\n", "obsidian:\n", "status: open",
+	for _, want := range []string{"title: Road Repair\n", "url: /town/issues/road-repair/\n", "tags:\n    - civic-roads\n", "obsidian:\n", "status: open", "last_updated: \"2026-09-22\"",
 		"[2026-08-19 - Meeting](/town/videos/2026-08-19-meeting/)"} {
 		if !strings.Contains(rr, want) {
 			t.Errorf("road repair missing %q:\n%s", want, rr)

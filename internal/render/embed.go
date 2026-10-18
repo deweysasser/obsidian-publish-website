@@ -109,8 +109,12 @@ func (r *Renderer) embedNote(l index.Link, line int, ctx Context) string {
 		r.Warn(ctx.Path, line, err.Error())
 		return ""
 	}
-	return fmt.Sprintf("\n\n<div class=\"embed\" data-src=\"%s\">\n\n%s\n\n</div>\n\n",
-		html.EscapeString(r.URLs.PageURL(slug)), strings.TrimRight(md, "\n"))
+	attr := ""
+	if r.Mode == ModeMarkdown {
+		attr = ` markdown="1"`
+	}
+	return fmt.Sprintf("\n\n<div class=\"embed\" data-src=\"%s\"%s>\n\n%s\n\n</div>\n\n",
+		html.EscapeString(r.URLs.PageURL(slug)), attr, strings.TrimRight(md, "\n"))
 }
 
 // section returns the embedded text of a note (whole body, a heading section

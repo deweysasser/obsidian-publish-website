@@ -19,6 +19,7 @@ import (
 	"github.com/deweysasser/obsidian-publish-website/internal/target"
 	"github.com/deweysasser/obsidian-publish-website/internal/target/html"
 	"github.com/deweysasser/obsidian-publish-website/internal/target/hugo"
+	"github.com/deweysasser/obsidian-publish-website/internal/target/jekyll"
 	"github.com/deweysasser/obsidian-publish-website/internal/transform"
 	"github.com/deweysasser/obsidian-publish-website/internal/vault"
 	"github.com/rs/zerolog"
@@ -175,6 +176,10 @@ func newTarget(cfg *config.Config, warn func(string), log zerolog.Logger) (targe
 			return nil, err
 		}
 		t.Warn = warn
+		return t, nil
+	case "jekyll":
+		t := jekyll.New(cfg)
+		t.Warn = func(m string) { log.Warn().Msg(m) }
 		return t, nil
 	case "hugo":
 		t := hugo.New(cfg)

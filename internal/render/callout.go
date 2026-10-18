@@ -54,19 +54,20 @@ func (r *Renderer) callout(lines []mdscan.Line, i int, ctx Context) (string, int
 	}
 	titleMD := r.rewriteLine(mdscan.Line{Text: title, Num: lines[i].Num}, ctx)
 	attr := fmt.Sprintf(`class="callout" data-callout="%s"`, canon)
-	contentAttr := `class="callout-content"`
-	if r.Mode == ModeMarkdown {
+	contentAttr, titleAttr := `class="callout-content"`, `class="callout-title"`
+	if r.Mode == ModeMarkdown { // kramdown only parses markdown inside HTML with markdown="1"
 		contentAttr += ` markdown="1"`
+		titleAttr += ` markdown="1"`
 	}
 	var b strings.Builder
 	if m[2] == "" {
-		fmt.Fprintf(&b, "<div %s>\n<div class=\"callout-title\">\n\n%s\n\n</div>\n", attr, titleMD)
+		fmt.Fprintf(&b, "<div %s>\n<div %s>\n\n%s\n\n</div>\n", attr, titleAttr, titleMD)
 	} else {
 		open := ""
 		if m[2] == "+" {
 			open = " open"
 		}
-		fmt.Fprintf(&b, "<details %s%s>\n<summary class=\"callout-title\">\n\n%s\n\n</summary>\n", attr, open, titleMD)
+		fmt.Fprintf(&b, "<details %s%s>\n<summary %s>\n\n%s\n\n</summary>\n", attr, open, titleAttr, titleMD)
 	}
 	fmt.Fprintf(&b, "<div %s>\n\n%s\n\n</div>\n", contentAttr, strings.TrimRight(body, "\n"))
 	if m[2] == "" {

@@ -164,3 +164,32 @@ func (n *FolderNode) Walk(f func(*FolderNode)) {
 		c.Walk(f)
 	}
 }
+
+// ExportFrontmatter prepares note frontmatter for re-serialization: YAML
+// timestamps become plain dates (when time-less) or RFC 3339 strings.
+func ExportFrontmatter(fm map[string]any) map[string]any {
+	out := make(map[string]any, len(fm))
+	for k, v := range fm {
+		out[k] = exportValue(v)
+	}
+	return out
+}
+
+func exportValue(v any) any {
+	switch x := v.(type) {
+	case time.Time:
+		if x.Hour() == 0 && x.Minute() == 0 && x.Second() == 0 && x.Nanosecond() == 0 {
+			return x.Format("2006-01-02")
+		}
+		return x.Format(time.RFC3339)
+	case map[string]any:
+		return ExportFrontmatter(x)
+	case []any:
+		out := make([]any, len(x))
+		for i, e := range x {
+			out[i] = exportValue(e)
+		}
+		return out
+	}
+	return v
+}
