@@ -62,6 +62,10 @@ func TestBuildHTMLFixture(t *testing.T) {
 	if rep.Pages != 6 {
 		t.Errorf("pages %d", rep.Pages)
 	}
+	ci := read(t, filepath.Join(out, "current-issues/index.html"))
+	if strings.Count(ci, "<table") != 4 || !strings.Contains(ci, "2026-09-30") {
+		t.Errorf("dataview tables not rendered:\n%s", ci)
+	}
 	idx := read(t, filepath.Join(out, "index.html"))
 	if !strings.Contains(idx, `href="/c/issues/"`) {
 		t.Error("home folder index should link to issues")
@@ -91,6 +95,18 @@ func TestBuildRebuildsOwnOutput(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(out, "stale.html")); err == nil {
 		t.Error("stale file kept")
+	}
+}
+
+func TestBuildDataviewNone(t *testing.T) {
+	out := t.TempDir()
+	cfg := fixtureConfig(out, "html")
+	cfg.Dataview = "none"
+	if _, err := Run(cfg, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	if ci := read(t, filepath.Join(out, "current-issues/index.html")); strings.Contains(ci, "<table") || !strings.Contains(ci, "dv-unsupported") {
+		t.Error("dataview: none should render placeholders")
 	}
 }
 

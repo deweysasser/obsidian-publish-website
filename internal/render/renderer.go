@@ -43,6 +43,7 @@ type Renderer struct {
 	fenceHooks map[string]FenceHook
 	inlineHook func(code string, line int, ctx Context) (string, bool)
 	embedHook  func(l index.Link, line int, ctx Context) string
+	dv         dvState
 }
 
 // NewRenderer builds a renderer. warn receives every non-fatal problem.
@@ -57,5 +58,8 @@ func NewRenderer(ix *index.Index, pub *selector.Published, u urls.Scheme, mode M
 	}
 	r.embedHook = r.embed
 	r.fenceHooks["folder-index-content"] = r.folderIndexHook
+	r.fenceHooks["dataview"] = r.dvBlock
+	r.fenceHooks["dataviewjs"] = r.dvJS
+	r.inlineHook = r.dvInline
 	return r
 }

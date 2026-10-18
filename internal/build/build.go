@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/deweysasser/obsidian-publish-website/internal/config"
+	"github.com/deweysasser/obsidian-publish-website/internal/dataview"
 	"github.com/deweysasser/obsidian-publish-website/internal/index"
 	"github.com/deweysasser/obsidian-publish-website/internal/render"
 	"github.com/deweysasser/obsidian-publish-website/internal/selector"
@@ -65,6 +66,9 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 	r := render.NewRenderer(ix, pub, tgt.Scheme(), tgt.Mode(), func(p string, line int, msg string) {
 		warn(fmt.Sprintf("%s:%d: %s", p, line, msg))
 	})
+	if err := evaluateDataview(cfg, r, ix, log); err != nil {
+		return nil, err
+	}
 	var paths []string
 	for p := range pub.Pages {
 		paths = append(paths, p)
@@ -114,6 +118,38 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 	log.Info().Int("pages", rep.Pages).Int("assets", rep.Assets).Int("warnings", len(rep.Warnings)).
 		Str("output", cfg.Output).Dur("elapsed", time.Since(start)).Msg("Site built")
 	return rep, nil
+}
+
+// evaluateDataview runs every query in the published pages through the real
+// Dataview engine in one batch.
+func evaluateDataview(cfg *config.Config, r *render.Renderer, ix *index.Index, log zerolog.Logger) error {
+	if cfg.Dataview == "none" {
+		r.DisableDataview()
+		return nil
+	}
+	reqs, err := r.CollectQueries()
+	if err != nil || len(reqs) == 0 {
+		return err
+	}
+	node, err := dataview.FindNode()
+	if err != nil {
+		return err
+	}
+	settings, err := dataview.LoadSettings(cfg.Vault)
+	if err != nil {
+		return err
+	}
+	if d, ok := settings["maxRecursiveRenderDepth"].(float64); ok && d > 0 {
+		r.MaxEmbedDepth = int(d)
+	}
+	start := time.Now()
+	res, err := dataview.NewEngine(node, settings, ix).RunIndex(reqs)
+	if err != nil {
+		return err
+	}
+	r.SetDataview(res, settings)
+	log.Info().Int("queries", len(reqs)).Dur("elapsed", time.Since(start)).Msg("Evaluated dataview queries")
+	return nil
 }
 
 func newTarget(cfg *config.Config, warn func(string)) (target.Target, error) {
