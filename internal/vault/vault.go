@@ -66,6 +66,11 @@ func Load(root string) (*Vault, error) {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
+		if !d.Type().IsRegular() {
+			// Symlinks could point outside the vault; never publish through them.
+			v.Warnings = append(v.Warnings, fmt.Sprintf("%s: skipped (not a regular file)", rel))
+			return nil
+		}
 		if !strings.EqualFold(path.Ext(rel), ".md") {
 			v.Attachments = append(v.Attachments, rel)
 			return nil

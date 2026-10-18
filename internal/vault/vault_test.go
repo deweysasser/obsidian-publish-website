@@ -88,3 +88,25 @@ func TestInvalidYAMLWarns(t *testing.T) {
 		t.Errorf("warnings %v", v.Warnings)
 	}
 }
+
+func TestSymlinksSkipped(t *testing.T) {
+	outside := t.TempDir()
+	os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("secret"), 0o644)
+	os.WriteFile(filepath.Join(outside, "secret.md"), []byte("secret"), 0o644)
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "ok.md"), []byte("ok"), 0o644)
+	if err := os.Symlink(filepath.Join(outside, "secret.txt"), filepath.Join(dir, "leak.png")); err != nil {
+		t.Skip("symlinks unsupported")
+	}
+	os.Symlink(filepath.Join(outside, "secret.md"), filepath.Join(dir, "leak.md"))
+	v, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Notes) != 1 || len(v.Attachments) != 0 {
+		t.Errorf("symlinks followed: notes %d attachments %v", len(v.Notes), v.Attachments)
+	}
+	if len(v.Warnings) != 2 {
+		t.Errorf("warnings %v", v.Warnings)
+	}
+}
