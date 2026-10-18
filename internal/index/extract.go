@@ -67,20 +67,21 @@ type Page struct {
 	Inlinks  []string
 }
 
+// Exported patterns are shared with the renderer so extraction and rewriting agree.
 var (
-	wikiRe      = regexp.MustCompile(`(!?)\[\[([^\[\]]+?)\]\]`)
-	mdLinkRe    = regexp.MustCompile(`(!?)\[([^\[\]]*)\]\((<[^>]+>|[^)\s]+)(?:\s+"[^"]*")?\)`)
-	schemeRe    = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*:`)
-	tagRe       = regexp.MustCompile(`(?:^|\s)#([\p{L}\p{N}_/-]+)`)
-	digitsRe    = regexp.MustCompile(`^[0-9/]+$`)
-	lineFieldRe = regexp.MustCompile(`^\s*(?:[-*+]\s+(?:\[.\]\s+)?)?(\*\*|__|\*|_)?([^:*_\[\]()\s][^:*\[\]()]*?)(?:\*\*|__|\*|_)?::\s*(.*)$`)
-	bracketRe   = regexp.MustCompile(`\[([^\[\]:]+?)::\s*([^\]]*)\]`)
-	parenRe     = regexp.MustCompile(`\(([^()\[\]:]+?)::\s*([^)]*)\)`)
-	listRe      = regexp.MustCompile(`^([ \t]*)([-*+]|\d+[.)])[ \t]+(?:\[(.)\][ \t]+)?(.*)$`)
-	headingRe   = regexp.MustCompile(`^(#{1,6})\s+(.*?)\s*$`)
-	blockIDRe   = regexp.MustCompile(`(?:^|\s)\^([A-Za-z0-9-]+)\s*$`)
-	fmLinkRe    = regexp.MustCompile(`^\s*\[\[([^\[\]]+)\]\]\s*$`)
-	splitTagRe  = regexp.MustCompile(`[,\s]+`)
+	WikiRe         = regexp.MustCompile(`(!?)\[\[([^\[\]]+?)\]\]`)
+	MdLinkRe       = regexp.MustCompile(`(!?)\[([^\[\]]*)\]\((<[^>]+>|[^)\s]+)(?:\s+"[^"]*")?\)`)
+	SchemeRe       = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*:`)
+	TagRe          = regexp.MustCompile(`(?:^|\s)#([\p{L}\p{N}_/-]+)`)
+	digitsRe       = regexp.MustCompile(`^[0-9/]+$`)
+	LineFieldRe    = regexp.MustCompile(`^\s*(?:[-*+]\s+(?:\[.\]\s+)?)?(\*\*|__|\*|_)?([^:*_\[\]()\s][^:*\[\]()]*?)(?:\*\*|__|\*|_)?::\s*(.*)$`)
+	BracketFieldRe = regexp.MustCompile(`\[([^\[\]:]+?)::\s*([^\]]*)\]`)
+	ParenFieldRe   = regexp.MustCompile(`\(([^()\[\]:]+?)::\s*([^)]*)\)`)
+	listRe         = regexp.MustCompile(`^([ \t]*)([-*+]|\d+[.)])[ \t]+(?:\[(.)\][ \t]+)?(.*)$`)
+	headingRe      = regexp.MustCompile(`^(#{1,6})\s+(.*?)\s*$`)
+	BlockIDRe      = regexp.MustCompile(`(?:^|\s)\^([A-Za-z0-9-]+)\s*$`)
+	fmLinkRe       = regexp.MustCompile(`^\s*\[\[([^\[\]]+)\]\]\s*$`)
+	splitTagRe     = regexp.MustCompile(`[,\s]+`)
 )
 
 // Mask replaces inline code and math spans with spaces so regexes only see prose.
@@ -123,19 +124,19 @@ func LinksInLine(masked string, line int) []Link {
 		l   Link
 	}
 	var hits []hit
-	for _, m := range wikiRe.FindAllStringSubmatchIndex(masked, -1) {
+	for _, m := range WikiRe.FindAllStringSubmatchIndex(masked, -1) {
 		l := ParseWikilink(masked[m[4]:m[5]], m[3] > m[2])
 		l.Line = line
 		hits = append(hits, hit{m[0], l})
 	}
-	for _, m := range mdLinkRe.FindAllStringSubmatchIndex(masked, -1) {
+	for _, m := range MdLinkRe.FindAllStringSubmatchIndex(masked, -1) {
 		// skip matches that are part of a wikilink
 		if m[0] > 0 && masked[m[0]-1] == '[' {
 			continue
 		}
 		raw := masked[m[6]:m[7]]
 		tgt := strings.TrimSuffix(strings.TrimPrefix(raw, "<"), ">")
-		if schemeRe.MatchString(tgt) || strings.HasPrefix(tgt, "#") || tgt == "" {
+		if SchemeRe.MatchString(tgt) || strings.HasPrefix(tgt, "#") || tgt == "" {
 			continue
 		}
 		l := Link{Raw: raw, Display: masked[m[4]:m[5]], Embed: m[3] > m[2], Markdown: true, Line: line}
@@ -160,7 +161,7 @@ func LinksInLine(masked string, line int) []Link {
 // TagsInLine returns explicit tags (with '#') in a masked prose line.
 func TagsInLine(masked string) []string {
 	var out []string
-	for _, m := range tagRe.FindAllStringSubmatch(masked, -1) {
+	for _, m := range TagRe.FindAllStringSubmatch(masked, -1) {
 		t := strings.TrimRight(m[1], "/")
 		if t == "" || digitsRe.MatchString(t) {
 			continue
@@ -173,13 +174,13 @@ func TagsInLine(masked string) []string {
 // FieldsInLine returns inline fields in a masked prose line.
 func FieldsInLine(masked string, line int) []Field {
 	var out []Field
-	for _, re := range []*regexp.Regexp{bracketRe, parenRe} {
+	for _, re := range []*regexp.Regexp{BracketFieldRe, ParenFieldRe} {
 		for _, m := range re.FindAllStringSubmatch(masked, -1) {
 			out = append(out, Field{Key: strings.TrimSpace(m[1]), Raw: strings.TrimSpace(m[2]), Line: line})
 		}
 	}
 	if len(out) == 0 {
-		if m := lineFieldRe.FindStringSubmatch(masked); m != nil {
+		if m := LineFieldRe.FindStringSubmatch(masked); m != nil {
 			out = append(out, Field{Key: strings.TrimSpace(m[2]), Raw: strings.TrimSpace(m[3]), Line: line})
 		}
 	}
@@ -220,7 +221,7 @@ func Extract(n *vault.Note) *Page {
 		etags = append(etags, tags...)
 		p.Fields = append(p.Fields, fields...)
 		blockID := ""
-		if m := blockIDRe.FindStringSubmatch(masked); m != nil {
+		if m := BlockIDRe.FindStringSubmatch(masked); m != nil {
 			blockID = m[1]
 			p.Blocks[blockID] = ln.Num
 		}
@@ -238,7 +239,7 @@ func Extract(n *vault.Note) *Page {
 				item.Status = m[3]
 			}
 			if blockID != "" {
-				body = strings.TrimSpace(blockIDRe.ReplaceAllString(body, ""))
+				body = strings.TrimSpace(BlockIDRe.ReplaceAllString(body, ""))
 			}
 			item.Text = body
 			idx := len(p.Lists)
