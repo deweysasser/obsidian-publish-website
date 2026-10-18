@@ -21,7 +21,7 @@ func StripComments(lines []Line) []Line {
 		var b strings.Builder
 		touched := in
 		for _, seg := range Inline(ln.Text) {
-			if seg.Code {
+			if seg.Code && !seg.Math {
 				// Code spans are literal, as in Obsidian: %% inside them neither
 				// opens nor closes a comment.
 				if !in {
@@ -29,6 +29,8 @@ func StripComments(lines []Line) []Line {
 				}
 				continue
 			}
+			// Prose and math: %% is a comment delimiter (it is never meaningful
+			// LaTeX, and $...$ detection is heuristic, so fail closed).
 			parts := strings.Split(seg.Text, "%%")
 			for k, p := range parts {
 				if k > 0 {

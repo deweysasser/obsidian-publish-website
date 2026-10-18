@@ -95,3 +95,10 @@ func TestCommentsFailClosedAroundCode(t *testing.T) {
 		}
 	}
 }
+
+func TestCommentInsideMathSpanHides(t *testing.T) {
+	r, _ := fixtureRenderer(t)
+	if got := pre(t, r, "price $5 %%secret$ hidden%% end"); strings.Contains(got, "secret") || strings.Contains(got, "hidden") {
+		t.Errorf("leaked: %q", got)
+	}
+}
