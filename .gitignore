@@ -1,3 +1,22 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/obsidian-publish-website
+.idea
+CHANGELOG.md
+dist
+bin
+.Dockerfile.tmp
 site/
-/obsidian-publish
 .superpowers/
+testdata/fixture-vault/.obsidian/*
+!testdata/fixture-vault/.obsidian/plugins/
+testdata/fixture-vault/.obsidian/plugins/*
+!testdata/fixture-vault/.obsidian/plugins/dataview/
+testdata/fixture-vault/.obsidian/plugins/dataview/*
+!testdata/fixture-vault/.obsidian/plugins/dataview/data.json
