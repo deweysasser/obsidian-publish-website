@@ -146,3 +146,32 @@ func TestPublishFlagFailsClosed(t *testing.T) {
 		t.Error("key is case-insensitive")
 	}
 }
+
+func TestHomeNestedFolderNoteOwnsFolderURL(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "R/State/Town/Town.md", "home")
+	write(t, dir, "R/State/Town/Issues/i.md", "i")
+	pub, err := Select(load(t, dir), &config.Config{Root: "R", Site: config.Site{Home: "State/Town/Town.md"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pub.Pages["R/State/Town/Town.md"] != "" || pub.Folders["R/State/Town"] != "" {
+		t.Errorf("home folder should map to the home URL: pages %v folders %v", pub.Pages, pub.Folders)
+	}
+	if pub.Folders["R/State"] != "state" || pub.Pages["R/State/Town/Issues/i.md"] != "state/town/issues/i" {
+		t.Errorf("other slugs changed: pages %v folders %v", pub.Pages, pub.Folders)
+	}
+}
+
+func TestHomeOutsideFolderNoteOwnsFolderURL(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "R/State/Town.md", "home")
+	write(t, dir, "R/State/Town/i.md", "i")
+	pub, err := Select(load(t, dir), &config.Config{Root: "R", Site: config.Site{Home: "State/Town.md"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pub.Folders["R/State/Town"] != "" || pub.FolderNote("R/State/Town") != "R/State/Town.md" {
+		t.Errorf("folders %v note %q", pub.Folders, pub.FolderNote("R/State/Town"))
+	}
+}

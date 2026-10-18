@@ -75,6 +75,19 @@ func Select(ix *index.Index, cfg *config.Config) (*Published, error) {
 			pub.folderNotes[folder] = p
 		}
 	}
+	// A home that is some folder's note (inside or outside form) gives that
+	// folder the home URL, so links to the folder reach the page.
+	if _, ok := pub.Pages[home]; ok {
+		outside := strings.TrimSuffix(home, path.Ext(home))
+		if _, isFolder := pub.Folders[outside]; isFolder && outside != cfg.Root && pub.folderNotes[outside] == "" {
+			pub.folderNotes[outside] = home
+		}
+		for folder, note := range pub.folderNotes {
+			if note == home && folder != cfg.Root {
+				pub.Folders[folder] = ""
+			}
+		}
+	}
 	if len(pub.Pages) == 0 {
 		return nil, fmt.Errorf("no notes to publish under %q", cfg.Root)
 	}
