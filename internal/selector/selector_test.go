@@ -122,3 +122,22 @@ func TestRootMissing(t *testing.T) {
 		t.Fatal("want error for empty root")
 	}
 }
+
+func TestPublishFlagFailsClosed(t *testing.T) {
+	for _, v := range []any{false, "false", "no", "off", "0", 0, "maybe", []any{}, nil} {
+		if !publishFalse(map[string]any{"publish": v}) {
+			t.Errorf("publish: %#v should be unpublished", v)
+		}
+	}
+	for _, v := range []any{true, "true", "yes", "TRUE"} {
+		if publishFalse(map[string]any{"publish": v}) {
+			t.Errorf("publish: %#v should be published", v)
+		}
+	}
+	if publishFalse(map[string]any{}) || publishFalse(nil) {
+		t.Error("absent key should publish")
+	}
+	if !publishFalse(map[string]any{"Publish": "no"}) {
+		t.Error("key is case-insensitive")
+	}
+}

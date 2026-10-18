@@ -98,12 +98,23 @@ func (p *Published) excluded(rel string) bool {
 	return false
 }
 
+// publishFalse reports whether frontmatter opts a note out. It fails closed:
+// when a "publish" key is present, only an unambiguous true value publishes.
 func publishFalse(fm map[string]any) bool {
-	switch v := fm["publish"].(type) {
-	case bool:
-		return !v
-	case string:
-		return strings.EqualFold(strings.TrimSpace(v), "false")
+	for k, v := range fm {
+		if !strings.EqualFold(k, "publish") {
+			continue
+		}
+		switch x := v.(type) {
+		case bool:
+			return !x
+		case string:
+			switch strings.ToLower(strings.TrimSpace(x)) {
+			case "true", "yes":
+				return false
+			}
+		}
+		return true
 	}
 	return false
 }
