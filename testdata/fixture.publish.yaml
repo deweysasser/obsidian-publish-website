@@ -1,0 +1,8 @@
+vault: fixture-vault
+root: Town
+exclude: [People/**]
+output: ../site
+search: none
+site:
+  title: Fixture Town
+  base_url: http://localhost:8765/

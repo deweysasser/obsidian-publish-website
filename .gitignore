@@ -20,3 +20,4 @@ testdata/fixture-vault/.obsidian/plugins/*
 !testdata/fixture-vault/.obsidian/plugins/dataview/
 testdata/fixture-vault/.obsidian/plugins/dataview/*
 !testdata/fixture-vault/.obsidian/plugins/dataview/data.json
+.playwright-mcp/
