@@ -64,6 +64,13 @@ func (r *Renderer) Preprocess(body []byte, firstLine int, ctx Context) (string, 
 			}
 			out = append(out, ln.Quote+`<div class="math">\[`, prefixLines(strings.Join(m, "\n"), ln.Quote), ln.Quote+`\]</div>`)
 			i = j
+		case ln.Quote != "" && calloutRe.MatchString(ln.Text):
+			res, end, err := r.callout(lines, i, ctx)
+			if err != nil {
+				return "", err
+			}
+			out = append(out, res)
+			i = end
 		default:
 			out = append(out, r.rewriteLine(ln, ctx))
 		}

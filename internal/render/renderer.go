@@ -38,6 +38,8 @@ type Renderer struct {
 	Mode Mode
 	Warn func(path string, line int, msg string)
 
+	MaxEmbedDepth int // 0 = DefaultMaxEmbedDepth
+
 	fenceHooks map[string]FenceHook
 	inlineHook func(code string, line int, ctx Context) (string, bool)
 	embedHook  func(l index.Link, line int, ctx Context) string
@@ -48,9 +50,11 @@ func NewRenderer(ix *index.Index, pub *selector.Published, u urls.Scheme, mode M
 	if warn == nil {
 		warn = func(string, int, string) {}
 	}
-	return &Renderer{
+	r := &Renderer{
 		Ix: ix, Pub: pub, URLs: u, Mode: mode, Warn: warn,
 		Res:        &resolve.Resolver{Ix: ix, Pub: pub, URLs: u},
 		fenceHooks: map[string]FenceHook{},
 	}
+	r.embedHook = r.embed
+	return r
 }
