@@ -80,3 +80,31 @@ func TestRenderMarkdownModeHasNoHTML(t *testing.T) {
 		t.Errorf("markdown mode page %+v", p)
 	}
 }
+
+func TestTitleNotLiftedFromComment(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "Town/x.md", "%%\n# Secret Title\n%%\nbody")
+	writeFile(t, dir, "Town/y.md", "# Real %% hidden %%\nbody")
+	r, _ := newTestRenderer(t, dir, ModeHTML)
+	p, err := r.Render("Town/x.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Title != "x" || strings.Contains(p.HTML, "Secret") {
+		t.Errorf("title %q html %q", p.Title, p.HTML)
+	}
+	p, _ = r.Render("Town/y.md")
+	if strings.Contains(p.Title+p.HTML, "hidden") {
+		t.Errorf("title %q html %q", p.Title, p.HTML)
+	}
+}
+
+func TestEmbedIgnoresFrontmatterPercent(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "Town/N.md", "---\nnote: \"50%% off\"\n---\n## A\nsee ^b\n%%\nsecret\n%%\n")
+	r, _ := newTestRenderer(t, dir, ModeHTML)
+	got := pre(t, r, "![[N#A]]")
+	if strings.Contains(got, "secret") || !strings.Contains(got, "see") {
+		t.Errorf("got %q", got)
+	}
+}

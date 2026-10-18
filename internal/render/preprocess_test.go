@@ -85,7 +85,7 @@ func TestPreprocessFenceHook(t *testing.T) {
 
 func TestCommentsFailClosedAroundCode(t *testing.T) {
 	for in, forbidden := range map[string]string{
-		"`%%` secret %% tail":           "secret",
+		"`%%` shown %% secret":          "secret",
 		"a %% hidden `%%` hidden2 %% b": "hidden2",
 		"%% start\n`x` secret\n%%":      "secret",
 	} {

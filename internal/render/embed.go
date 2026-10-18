@@ -123,7 +123,7 @@ func (r *Renderer) section(p, subpath string) (string, int, bool) {
 	}
 	lines := strings.Split(string(n.Raw), "\n")
 	// Slice the comment-stripped note so a section can never start inside %%.
-	clean := mdscan.StripComments(mdscan.Lines(n.Raw, 1))
+	clean := mdscan.StripComments(mdscan.Lines(n.Body, n.BodyLine))
 	get := func(from, to int) (string, int, bool) { // 1-based inclusive file lines
 		var out []string
 		for _, l := range clean {

@@ -3,7 +3,7 @@ package mdscan
 import "strings"
 
 // StripComments removes %%...%% comments (inline and multi-line) from prose.
-// Ambiguities around code spans resolve toward hiding text.
+// Matches Obsidian reading view: code spans are literal.
 func StripComments(lines []Line) []Line {
 	var out []Line
 	in := false
@@ -22,16 +22,10 @@ func StripComments(lines []Line) []Line {
 		touched := in
 		for _, seg := range Inline(ln.Text) {
 			if seg.Code {
-				// Fail closed: an unbalanced %% inside a code span opens a
-				// comment; %% inside code never closes one.
+				// Code spans are literal, as in Obsidian: %% inside them neither
+				// opens nor closes a comment.
 				if !in {
-					if strings.Count(seg.Text, "%%")%2 == 1 {
-						before, _, _ := strings.Cut(seg.Text, "%%")
-						b.WriteString(before)
-						in, touched = true, true
-					} else { // balanced pairs inside code are literal
-						b.WriteString(seg.Text)
-					}
+					b.WriteString(seg.Text)
 				}
 				continue
 			}

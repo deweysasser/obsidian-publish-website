@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deweysasser/obsidian-publish-website/internal/mdscan"
 	"github.com/deweysasser/obsidian-publish-website/internal/resolve"
 )
 
@@ -42,7 +43,7 @@ func (r *Renderer) Render(p string) (*Page, error) {
 		page.Title = strings.TrimSpace(t)
 	} else {
 		page.Title = strings.TrimSuffix(path.Base(p), path.Ext(p))
-		if title, rest, ok := liftH1(body); ok {
+		if title, rest, ok := liftH1(body, n.BodyLine); ok {
 			page.Title, body = title, rest
 		}
 	}
@@ -66,15 +67,20 @@ func (r *Renderer) Render(p string) (*Page, error) {
 }
 
 // liftH1 removes a leading "# Title" line (keeping line numbering intact).
-func liftH1(body []byte) (string, []byte, bool) {
-	lines := strings.SplitAfter(string(body), "\n")
-	for i, l := range lines {
-		if strings.TrimSpace(l) == "" {
+// It looks only at comment-stripped lines, so a heading inside %% is never lifted.
+func liftH1(body []byte, firstLine int) (string, []byte, bool) {
+	for _, l := range mdscan.StripComments(mdscan.Lines(body, firstLine)) {
+		if strings.TrimSpace(l.Text) == "" {
 			continue
 		}
-		m := h1Re.FindStringSubmatch(strings.TrimRight(l, "\r\n"))
-		if m == nil {
+		m := h1Re.FindStringSubmatch(l.Text)
+		if m == nil || l.InFence || l.FenceOpen {
 			return "", body, false
+		}
+		lines := strings.SplitAfter(string(body), "\n")
+		i := l.Num - firstLine
+		if i < 0 || i >= len(lines) || strings.TrimRight(lines[i], "\r\n") != l.Text {
+			return "", body, false // the line was altered by comment stripping
 		}
 		lines[i] = "\n"
 		return plainTitle(m[1]), []byte(strings.Join(lines, "")), true
