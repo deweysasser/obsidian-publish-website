@@ -1,6 +1,7 @@
 package program
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -22,13 +23,23 @@ type Options struct {
 	Debug        bool   `group:"Info" help:"Show debugging information"`
 	OutputFormat string `group:"Info" enum:"auto,jsonl,terminal" default:"auto" help:"How to show program output (auto|terminal|jsonl)"`
 	Quiet        bool   `group:"Info" help:"Be less verbose than usual"`
+
+	Build BuildCmd `cmd:"" default:"withargs" help:"Build the site from a publish.yaml config"`
+}
+
+// BuildCmd builds a site from a configuration file.
+type BuildCmd struct {
+	Config string `short:"c" default:"publish.yaml" help:"Path to the publish config file"`
+	Target string `enum:",html,hugo,jekyll" default:"" help:"Override the config's target (html|hugo|jekyll)"`
+	Output string `short:"o" help:"Override the config's output directory"`
+	Strict bool   `help:"Treat warnings (query errors, broken links, unsupported dataviewjs) as errors"`
 }
 
 // Parse calls the CLI parsing routines
 func (program *Options) Parse(args []string) (*kong.Context, error) {
 	parser, err := kong.New(program,
 		kong.ShortUsageOnError(),
-		// kong.Description("Brief Program Summary"),
+		kong.Description("Publish a subtree of an Obsidian vault as a website"),
 	)
 
 	if err != nil {
@@ -39,10 +50,9 @@ func (program *Options) Parse(args []string) (*kong.Context, error) {
 	return parser.Parse(args)
 }
 
-// Run runs the program.  Note that you can specify any argument types as long as they're bound.
-// Useful arguments might be context.Context, log.Logger, Options
-func (program *Options) Run() error {
-	return nil
+// Run executes the build command.
+func (cmd *BuildCmd) Run(logger zerolog.Logger) error {
+	return errors.New("not implemented")
 }
 
 // AfterApply runs after the options are parsed but before anything runs

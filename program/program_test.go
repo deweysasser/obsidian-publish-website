@@ -29,3 +29,20 @@ func TestOptions_Run(t *testing.T) {
 	assert.Equal(t, exitValue, 0)
 	assert.Equal(t, "unknown\n", out)
 }
+
+func TestParseBuildCommand(t *testing.T) {
+	var program Options
+	ctx, err := program.Parse([]string{"build", "-c", "x.yaml", "--target", "hugo", "-o", "out", "--strict"})
+	assert.NoError(t, err)
+	assert.Equal(t, "build", ctx.Command())
+	assert.Equal(t, "x.yaml", program.Build.Config)
+	assert.Equal(t, "hugo", program.Build.Target)
+	assert.Equal(t, "out", program.Build.Output)
+	assert.True(t, program.Build.Strict)
+}
+
+func TestBuildCommandRejectsBadTarget(t *testing.T) {
+	var program Options
+	_, err := program.Parse([]string{"build", "--target", "pdf"})
+	assert.Error(t, err)
+}
