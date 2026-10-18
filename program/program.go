@@ -1,8 +1,11 @@
 package program
 
 import (
-	"errors"
+	"path/filepath"
+
 	"fmt"
+	"github.com/deweysasser/obsidian-publish-website/internal/build"
+	"github.com/deweysasser/obsidian-publish-website/internal/config"
 	"io"
 	"os"
 	"runtime"
@@ -52,7 +55,21 @@ func (program *Options) Parse(args []string) (*kong.Context, error) {
 
 // Run executes the build command.
 func (cmd *BuildCmd) Run(logger zerolog.Logger) error {
-	return errors.New("not implemented")
+	cfg, err := config.Load(cmd.Config)
+	if err != nil {
+		return err
+	}
+	if cmd.Target != "" {
+		cfg.Target = cmd.Target
+	}
+	if cmd.Output != "" {
+		if cfg.Output, err = filepath.Abs(cmd.Output); err != nil {
+			return err
+		}
+	}
+	cfg.Strict = cmd.Strict
+	_, err = build.Run(cfg, logger)
+	return err
 }
 
 // AfterApply runs after the options are parsed but before anything runs

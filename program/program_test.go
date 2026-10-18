@@ -1,6 +1,9 @@
 package program
 
 import (
+	"path/filepath"
+
+	"github.com/rs/zerolog"
 	"os"
 	"testing"
 
@@ -45,4 +48,26 @@ func TestBuildCommandRejectsBadTarget(t *testing.T) {
 	var program Options
 	_, err := program.Parse([]string{"build", "--target", "pdf"})
 	assert.Error(t, err)
+}
+
+func TestBuildCommandRun(t *testing.T) {
+	dir := t.TempDir()
+	vault, _ := filepath.Abs("../testdata/fixture-vault")
+	cfg := filepath.Join(dir, "publish.yaml")
+	os.WriteFile(cfg, []byte("vault: "+vault+"\nroot: Town\nexclude: [People/**]\nsearch: none\nsite: {title: T, base_url: https://x.io/}\n"), 0o644)
+	out := filepath.Join(dir, "out")
+	cmd := BuildCmd{Config: cfg, Output: out}
+	assert.NoError(t, cmd.Run(zerolog.Nop()))
+	_, err := os.Stat(filepath.Join(out, "issues/road-repair/index.html"))
+	assert.NoError(t, err)
+
+	broken := filepath.Join(dir, "v")
+	os.MkdirAll(filepath.Join(broken, "R"), 0o755)
+	os.WriteFile(filepath.Join(broken, "R", "a.md"), []byte("[[missing]]"), 0o644)
+	cfg2 := filepath.Join(dir, "p2.yaml")
+	os.WriteFile(cfg2, []byte("vault: "+broken+"\nroot: R\nsearch: none\n"), 0o644)
+	cmd = BuildCmd{Config: cfg2, Output: filepath.Join(dir, "out2")}
+	assert.NoError(t, cmd.Run(zerolog.Nop()))
+	cmd = BuildCmd{Config: cfg2, Output: filepath.Join(dir, "out3"), Strict: true}
+	assert.ErrorContains(t, cmd.Run(zerolog.Nop()), "R/a.md:1")
 }

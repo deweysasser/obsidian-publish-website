@@ -56,5 +56,6 @@ func NewRenderer(ix *index.Index, pub *selector.Published, u urls.Scheme, mode M
 		fenceHooks: map[string]FenceHook{},
 	}
 	r.embedHook = r.embed
+	r.fenceHooks["folder-index-content"] = r.folderIndexHook
 	return r
 }

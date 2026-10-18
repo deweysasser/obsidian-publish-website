@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{if .Title}}{{.Title}} · {{end}}{{.SiteTitle}}</title>
+<link rel="stylesheet" href="{{.Base}}assets/style.css">
+{{- if .Search}}
+<link rel="stylesheet" href="{{.Base}}pagefind/pagefind-ui.css">
+{{- end}}
+{{- if .Math}}
+<link rel="stylesheet" href="{{.Base}}assets/vendor/katex/katex.min.css">
+{{- end}}
+</head>
+<body>
+<header class="site-header" data-pagefind-ignore="all">
+  <button class="nav-toggle" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">☰</button>
+  <a class="site-title" href="{{.Base}}">{{.SiteTitle}}</a>
+  {{- if .Search}}<div id="search" class="search"></div>{{end}}
+</header>
+<div class="layout">
+  <nav id="site-nav" class="site-nav" data-pagefind-ignore="all">
+    {{.Nav}}
+    <ul class="nav-extra">
+      <li><a href="{{.Base}}all/">All pages</a></li>
+      <li><a href="{{.Base}}tags/">Tags</a></li>
+    </ul>
+  </nav>
+  <main class="content">
+    {{- if .Crumbs}}
+    <ol class="breadcrumbs" data-pagefind-ignore="all">
+      {{- range .Crumbs}}<li><a href="{{.URL}}">{{.Name}}</a></li>{{end}}
+    </ol>
+    {{- end}}
+    <article {{if .Indexed}}data-pagefind-body{{end}}>
+      <h1 class="page-title">{{.Title}}</h1>
+      {{- if .Tags}}
+      <p class="page-tags">{{range .Tags}}<a class="tag" href="{{.URL}}">{{.Name}}</a> {{end}}</p>
+      {{- end}}
+      {{.Content}}
+    </article>
+    {{- if or .Backlinks .Modified}}
+    <footer class="page-footer" data-pagefind-ignore="all">
+      {{- if .Backlinks}}
+      <section class="backlinks">
+        <h2>Linked from</h2>
+        <ul>{{range .Backlinks}}<li><a href="{{.URL}}">{{.Text}}</a></li>{{end}}</ul>
+      </section>
+      {{- end}}
+      {{- if .Modified}}<p class="modified">Last modified {{.Modified}}</p>{{end}}
+    </footer>
+    {{- end}}
+  </main>
+  {{- if .TOC}}
+  <aside class="toc" data-pagefind-ignore="all">
+    <h2>On this page</h2>
+    <ul>{{range .TOC}}<li class="toc-l{{.Level}}"><a href="#{{.ID}}">{{.Text}}</a></li>{{end}}</ul>
+  </aside>
+  {{- end}}
+</div>
+<script src="{{.Base}}assets/app.js" defer></script>
+{{- if .Search}}
+<script src="{{.Base}}pagefind/pagefind-ui.js"></script>
+<script>window.addEventListener("DOMContentLoaded",function(){new PagefindUI({element:"#search",showSubResults:true,showImages:false});});</script>
+{{- end}}
+{{- if .Math}}
+<script defer src="{{.Base}}assets/vendor/katex/katex.min.js"></script>
+<script defer src="{{.Base}}assets/vendor/katex/auto-render.min.js" onload="renderMathInElement(document.querySelector('.content'),{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'\\(',right:'\\)',display:false}]})"></script>
+{{- end}}
+{{- if .Mermaid}}
+<script type="module">import mermaid from "{{.Base}}assets/vendor/mermaid/mermaid.esm.min.mjs";mermaid.initialize({startOnLoad:true,theme:window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"default"});</script>
+{{- end}}
+</body>
+</html>

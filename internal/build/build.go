@@ -1,0 +1,130 @@
+// Package build orchestrates a full site build.
+package build
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/deweysasser/obsidian-publish-website/internal/config"
+	"github.com/deweysasser/obsidian-publish-website/internal/index"
+	"github.com/deweysasser/obsidian-publish-website/internal/render"
+	"github.com/deweysasser/obsidian-publish-website/internal/selector"
+	"github.com/deweysasser/obsidian-publish-website/internal/target"
+	"github.com/deweysasser/obsidian-publish-website/internal/target/html"
+	"github.com/deweysasser/obsidian-publish-website/internal/transform"
+	"github.com/deweysasser/obsidian-publish-website/internal/vault"
+	"github.com/rs/zerolog"
+)
+
+// Report summarizes a build.
+type Report struct {
+	Pages    int
+	Assets   int
+	Warnings []string
+}
+
+// Run builds the site described by cfg.
+func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
+	rep := &Report{}
+	warn := func(msg string) {
+		rep.Warnings = append(rep.Warnings, msg)
+		log.Warn().Msg(msg)
+	}
+	if st, err := os.Stat(filepath.Join(cfg.Vault, filepath.FromSlash(cfg.Root))); err != nil || !st.IsDir() {
+		return nil, fmt.Errorf("root %q is not a folder in vault %s", cfg.Root, cfg.Vault)
+	}
+	transforms, err := transform.Chain(cfg.Transforms)
+	if err != nil {
+		return nil, err
+	}
+	tgt, err := newTarget(cfg, warn)
+	if err != nil {
+		return nil, err
+	}
+
+	start := time.Now()
+	v, err := vault.Load(cfg.Vault)
+	if err != nil {
+		return nil, err
+	}
+	for _, w := range v.Warnings {
+		warn(w)
+	}
+	ix := index.Build(v)
+	pub, err := selector.Select(ix, cfg)
+	if err != nil {
+		return nil, err
+	}
+	log.Info().Int("notes", len(v.Notes)).Int("published", len(pub.Pages)).Dur("elapsed", time.Since(start)).Msg("Indexed vault")
+
+	r := render.NewRenderer(ix, pub, tgt.Scheme(), tgt.Mode(), func(p string, line int, msg string) {
+		warn(fmt.Sprintf("%s:%d: %s", p, line, msg))
+	})
+	var paths []string
+	for p := range pub.Pages {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	site := &target.Site{Config: cfg, Tags: map[string][]*render.Page{}, Build: time.Now(), URLs: tgt.Scheme()}
+	for _, p := range paths {
+		page, err := r.Render(p)
+		if err != nil {
+			return nil, err
+		}
+		if err := transform.Apply(transforms, page); err != nil {
+			return nil, err
+		}
+		site.Pages = append(site.Pages, page)
+		for _, tg := range page.Tags {
+			site.Tags[tg] = append(site.Tags[tg], page)
+		}
+	}
+	sort.Slice(site.Pages, func(i, j int) bool { return site.Pages[i].Slug < site.Pages[j].Slug })
+	site.Tree = target.BuildTree(pub, site.Pages, tgt.Scheme())
+	for src, slug := range pub.Assets {
+		site.Assets = append(site.Assets, target.Asset{Src: v.AbsPath(src), Slug: slug})
+	}
+	sort.Slice(site.Assets, func(i, j int) bool { return site.Assets[i].Slug < site.Assets[j].Slug })
+
+	if cfg.Strict && len(rep.Warnings) > 0 {
+		return rep, fmt.Errorf("--strict: %d warning(s):\n  %s", len(rep.Warnings), strings.Join(rep.Warnings, "\n  "))
+	}
+	if err := tgt.Prepare(); err != nil {
+		return nil, err
+	}
+	for _, p := range site.Pages {
+		if err := tgt.WritePage(site, p); err != nil {
+			return nil, fmt.Errorf("%s: %w", p.SourcePath, err)
+		}
+	}
+	for _, a := range site.Assets {
+		if err := tgt.CopyAsset(a); err != nil {
+			return nil, err
+		}
+	}
+	if err := tgt.Finalize(site); err != nil {
+		return nil, err
+	}
+	rep.Pages, rep.Assets = len(site.Pages), len(site.Assets)
+	log.Info().Int("pages", rep.Pages).Int("assets", rep.Assets).Int("warnings", len(rep.Warnings)).
+		Str("output", cfg.Output).Dur("elapsed", time.Since(start)).Msg("Site built")
+	return rep, nil
+}
+
+func newTarget(cfg *config.Config, warn func(string)) (target.Target, error) {
+	switch cfg.Target {
+	case "html":
+		t, err := html.New(cfg)
+		if err != nil {
+			return nil, err
+		}
+		t.Warn = warn
+		return t, nil
+	}
+	return nil, errors.New("target " + cfg.Target + " is not implemented yet")
+}
