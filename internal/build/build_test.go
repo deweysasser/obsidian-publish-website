@@ -125,7 +125,7 @@ func TestWarningsOnlyForPublishedTree(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "R", "a.md"), []byte("ok"), 0o644)
 	os.WriteFile(filepath.Join(dir, "R", "bad.md"), []byte("---\n: : :\n---\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "Other", "bad.md"), []byte("---\n: : :\n---\n"), 0o644)
-	cfg := &config.Config{Vault: dir, Root: "R", Output: filepath.Join(t.TempDir(), "o"), Search: "none"}
+	cfg := &config.Config{Vault: dir, Root: "R", Output: filepath.Join(t.TempDir(), "o"), Search: "none", Site: config.Site{BaseURL: "https://x.io/"}}
 	cfg.ApplyDefaults()
 	rep, err := Run(cfg, zerolog.Nop())
 	if err != nil {
