@@ -107,7 +107,7 @@ func ParseWikilink(inner string, embed bool) Link {
 	t := inner
 	if i := strings.Index(t, "|"); i >= 0 {
 		l.Display = strings.TrimSpace(t[i+1:])
-		t = t[:i]
+		t = strings.TrimSuffix(t[:i], `\`) // "\|" is the alias separator inside tables
 	}
 	if i := strings.Index(t, "#"); i >= 0 {
 		l.Subpath = strings.TrimSpace(t[i+1:])

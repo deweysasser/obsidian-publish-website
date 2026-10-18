@@ -102,3 +102,11 @@ func TestCommentInsideMathSpanHides(t *testing.T) {
 		t.Errorf("leaked: %q", got)
 	}
 }
+
+func TestWikilinkInTable(t *testing.T) {
+	r, warns := fixtureRenderer(t)
+	got := pre(t, r, "| a | b |\n|---|---|\n| [[Road Repair\\|RR]] | ![[photo.png\\|20]] |")
+	if !strings.Contains(got, "| [RR](/c/issues/road-repair/) | <img src=\"/c/assets/img/photo.png\" alt=\"photo.png\" width=\"20\"> |") || len(*warns) != 0 {
+		t.Errorf("got %q warns %v", got, *warns)
+	}
+}

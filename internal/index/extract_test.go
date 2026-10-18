@@ -137,3 +137,18 @@ func TestExtractIgnoresComments(t *testing.T) {
 		t.Errorf("commented metadata extracted: %+v", p)
 	}
 }
+
+func TestParseWikilinkEscapedPipe(t *testing.T) {
+	l := ParseWikilink(`Page\|Alias`, false)
+	if l.Target != "Page" || l.Display != "Alias" {
+		t.Errorf("%+v", l)
+	}
+	l = ParseWikilink(`pic.png\|200`, true)
+	if l.Target != "pic.png" || l.Display != "200" {
+		t.Errorf("%+v", l)
+	}
+	l = ParseWikilink(`A#H\|x`, false)
+	if l.Target != "A" || l.Subpath != "H" || l.Display != "x" {
+		t.Errorf("%+v", l)
+	}
+}
