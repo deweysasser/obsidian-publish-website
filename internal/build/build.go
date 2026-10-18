@@ -143,6 +143,15 @@ func evaluateDataview(cfg *config.Config, r *render.Renderer, ix *index.Index, l
 		r.DisableDataview()
 		return nil
 	}
+	settings, err := dataview.LoadSettings(cfg.Vault)
+	if err != nil {
+		return err
+	}
+	if d, ok := settings["maxRecursiveRenderDepth"].(float64); ok && d > 0 {
+		r.MaxEmbedDepth = int(d)
+	}
+	// settings (inline prefix, embed depth) must be in place before collection
+	r.SetDataview(nil, settings)
 	reqs, err := r.CollectQueries()
 	if err != nil || len(reqs) == 0 {
 		return err
@@ -150,13 +159,6 @@ func evaluateDataview(cfg *config.Config, r *render.Renderer, ix *index.Index, l
 	node, err := dataview.FindNode()
 	if err != nil {
 		return err
-	}
-	settings, err := dataview.LoadSettings(cfg.Vault)
-	if err != nil {
-		return err
-	}
-	if d, ok := settings["maxRecursiveRenderDepth"].(float64); ok && d > 0 {
-		r.MaxEmbedDepth = int(d)
 	}
 	start := time.Now()
 	var include func(string) bool

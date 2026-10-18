@@ -85,3 +85,21 @@ func TestNoLeakViaDataview(t *testing.T) {
 		})
 	}
 }
+
+func TestDataviewSettingsApplyToCollection(t *testing.T) {
+	requireNode(t)
+	v := copyFixture(t)
+	os.WriteFile(filepath.Join(v, ".obsidian/plugins/dataview/data.json"), []byte(`{"inlineQueryPrefix":"dv:"}`), 0o644)
+	os.WriteFile(filepath.Join(v, "Town", "Inline.md"), []byte("Sum: `dv: 40 + 2`\n"), 0o644)
+	out := t.TempDir()
+	cfg := fixtureConfig(out, "html")
+	cfg.Vault = v
+	rep, err := Run(cfg, zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(out, "inline/index.html"))
+	if !strings.Contains(string(b), "Sum: 42") || len(rep.Warnings) != 0 {
+		t.Errorf("custom inline prefix not evaluated: warnings %v\n%s", rep.Warnings, b)
+	}
+}

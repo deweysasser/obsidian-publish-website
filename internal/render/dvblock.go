@@ -124,7 +124,11 @@ func (r *Renderer) dvInline(src string, line int, ctx Context) (string, bool) {
 		if r.dv.collecting {
 			return "", true
 		}
-		if !ok || !res.OK {
+		if !ok {
+			r.Warn(ctx.Path, line, "dataview inline query was not evaluated")
+			return `<span class="dv-error">Dataview: query was not evaluated</span>`, true
+		}
+		if !res.OK {
 			r.Warn(ctx.Path, line, "dataview inline query failed: "+firstLine(res.Error))
 			return `<span class="dv-error">Dataview: ` + html.EscapeString(firstLine(res.Error)) + `</span>`, true
 		}
