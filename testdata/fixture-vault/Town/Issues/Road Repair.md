@@ -15,3 +15,5 @@ Road repair on Main Street. Discussed at [[2026-08-19 - Meeting]] with [[Alice S
 ## Log
 
 - [[2026-08-19 - Meeting]] — initial discussion.
+
+![[photo.png|200]]

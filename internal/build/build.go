@@ -18,6 +18,7 @@ import (
 	"github.com/deweysasser/obsidian-publish-website/internal/selector"
 	"github.com/deweysasser/obsidian-publish-website/internal/target"
 	"github.com/deweysasser/obsidian-publish-website/internal/target/html"
+	"github.com/deweysasser/obsidian-publish-website/internal/target/hugo"
 	"github.com/deweysasser/obsidian-publish-website/internal/transform"
 	"github.com/deweysasser/obsidian-publish-website/internal/vault"
 	"github.com/rs/zerolog"
@@ -44,7 +45,7 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	tgt, err := newTarget(cfg, warn)
+	tgt, err := newTarget(cfg, warn, log)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +167,7 @@ func evaluateDataview(cfg *config.Config, r *render.Renderer, ix *index.Index, l
 	return nil
 }
 
-func newTarget(cfg *config.Config, warn func(string)) (target.Target, error) {
+func newTarget(cfg *config.Config, warn func(string), log zerolog.Logger) (target.Target, error) {
 	switch cfg.Target {
 	case "html":
 		t, err := html.New(cfg)
@@ -174,6 +175,10 @@ func newTarget(cfg *config.Config, warn func(string)) (target.Target, error) {
 			return nil, err
 		}
 		t.Warn = warn
+		return t, nil
+	case "hugo":
+		t := hugo.New(cfg)
+		t.Warn = func(m string) { log.Warn().Msg(m) }
 		return t, nil
 	}
 	return nil, errors.New("target " + cfg.Target + " is not implemented yet")
