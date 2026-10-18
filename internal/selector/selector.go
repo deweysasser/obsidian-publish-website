@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
@@ -21,6 +22,7 @@ type Published struct {
 
 	exclude     []string
 	folderNotes map[string]string
+	assetSlugs  map[string]string // slug → attachment path, for collision avoidance
 }
 
 // Select computes the published set for cfg.
@@ -147,7 +149,16 @@ func (p *Published) MarkAsset(assetPath string) string {
 		return s
 	}
 	rel, _ := p.rel(assetPath)
-	s := AssetSlug(rel)
+	base := AssetSlug(rel)
+	if p.assetSlugs == nil {
+		p.assetSlugs = map[string]string{}
+	}
+	s := base
+	for i := 2; p.assetSlugs[s] != "" && p.assetSlugs[s] != assetPath; i++ {
+		ext := path.Ext(base)
+		s = strings.TrimSuffix(base, ext) + "-" + strconv.Itoa(i) + ext
+	}
+	p.assetSlugs[s] = assetPath
 	p.Assets[assetPath] = s
 	return s
 }

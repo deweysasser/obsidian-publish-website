@@ -96,7 +96,8 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 		}
 		site.Pages = append(site.Pages, page)
 		for _, tg := range page.Tags {
-			site.Tags[tg] = append(site.Tags[tg], page)
+			k := strings.ToLower(tg) // #Project and #project share one tag page
+			site.Tags[k] = append(site.Tags[k], page)
 		}
 	}
 	sort.Slice(site.Pages, func(i, j int) bool { return site.Pages[i].Slug < site.Pages[j].Slug })

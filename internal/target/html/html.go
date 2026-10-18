@@ -86,7 +86,7 @@ func (t *Target) write(s *target.Site, slug string, v view, current string) erro
 		return err
 	}
 	rel := "index.html"
-	if slug == "404" {
+	if slug == notFoundSlug {
 		rel = "404.html"
 	} else if slug != "" {
 		rel = slug + "/index.html"
@@ -94,8 +94,17 @@ func (t *Target) write(s *target.Site, slug string, v view, current string) erro
 	return target.WriteFile(t.out, rel, buf.Bytes())
 }
 
+// notFoundSlug marks the generated 404 page; it cannot collide with a note slug.
+const notFoundSlug = "\x00404"
+
+// reserved top-level slugs used by generated pages and static files.
+var reserved = map[string]bool{"all": true, "tags": true, "assets": true, "pagefind": true}
+
 // WritePage writes one note page.
 func (t *Target) WritePage(s *target.Site, p *render.Page) error {
+	if top, _, _ := strings.Cut(p.Slug, "/"); reserved[top] {
+		return fmt.Errorf("%s: its URL /%s/ is reserved for generated pages in the html target; rename the note or folder", p.SourcePath, top)
+	}
 	v := view{Title: p.Title, Content: template.HTML(p.HTML), TOC: tocWithout(p.TOC), Backlinks: p.Backlinks,
 		Crumbs: crumbs(s, p.SourcePath, p.Slug), Indexed: true}
 	if !p.Mtime.IsZero() {
@@ -144,7 +153,7 @@ func (t *Target) Finalize(s *target.Site) error {
 	if err := t.writeTags(s); err != nil {
 		return err
 	}
-	if err := t.write(s, "404", view{Title: "Not found", Content: template.HTML(`<p>That page does not exist. Try the <a href="` + t.base + `all/">list of all pages</a>.</p>`)}, ""); err != nil {
+	if err := t.write(s, notFoundSlug, view{Title: "Not found", Content: template.HTML(`<p>That page does not exist. Try the <a href="` + t.base + `all/">list of all pages</a>.</p>`)}, ""); err != nil {
 		return err
 	}
 	if err := target.WriteFile(t.out, ".nojekyll", nil); err != nil {
