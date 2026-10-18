@@ -196,7 +196,7 @@ func Extract(n *vault.Note) *Page {
 	section := ""
 	type open struct{ indent, idx int }
 	var stack []open
-	lines := mdscan.Lines(n.Body, n.BodyLine)
+	lines := mdscan.StripComments(mdscan.Lines(n.Body, n.BodyLine))
 	for _, ln := range lines {
 		if ln.InFence || ln.FenceOpen || ln.FenceClose {
 			if ln.FenceOpen && width(leadingWS(ln.Text)) == 0 {

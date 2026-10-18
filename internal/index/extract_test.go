@@ -130,3 +130,10 @@ func TestExtractHeadingsAndBlocks(t *testing.T) {
 		t.Errorf("blocks %v", p.Blocks)
 	}
 }
+
+func TestExtractIgnoresComments(t *testing.T) {
+	p := extract(t, "%%\n## Hidden\n- [ ] secret task [[X]] #t k:: v ^b\n%%\nok\n")
+	if len(p.Headings)+len(p.Lists)+len(p.Links)+len(p.Tags)+len(p.Fields)+len(p.Blocks) != 0 {
+		t.Errorf("commented metadata extracted: %+v", p)
+	}
+}

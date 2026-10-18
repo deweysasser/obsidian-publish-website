@@ -74,3 +74,17 @@ func TestEmbedCycleAndExcluded(t *testing.T) {
 		t.Errorf("excluded embed:\n%s", got)
 	}
 }
+
+func TestEmbedSectionInsideComment(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "Town/N.md", "visible\n%%\n## Secret\nhidden text ^blk\n%%\n## Open\nshown\n")
+	r, _ := newTestRenderer(t, dir, ModeHTML)
+	for _, src := range []string{"![[N#Secret]]", "![[N#^blk]]", "![[N]]", "![[N#Open]]"} {
+		if got := pre(t, r, src); strings.Contains(got, "hidden text") {
+			t.Errorf("%s leaked commented content: %q", src, got)
+		}
+	}
+	if got := pre(t, r, "![[N#Open]]"); !strings.Contains(got, "shown") {
+		t.Errorf("open section missing: %q", got)
+	}
+}

@@ -82,3 +82,16 @@ func TestPreprocessFenceHook(t *testing.T) {
 		t.Errorf("got %q code %q line %d", got, gotCode, gotLine)
 	}
 }
+
+func TestCommentsFailClosedAroundCode(t *testing.T) {
+	for in, forbidden := range map[string]string{
+		"`%%` secret %% tail":           "secret",
+		"a %% hidden `%%` hidden2 %% b": "hidden2",
+		"%% start\n`x` secret\n%%":      "secret",
+	} {
+		r, _ := fixtureRenderer(t)
+		if got := pre(t, r, in); strings.Contains(got, forbidden) {
+			t.Errorf("Preprocess(%q) leaked %q: %q", in, forbidden, got)
+		}
+	}
+}

@@ -20,7 +20,7 @@ var (
 
 // Preprocess rewrites an Obsidian markdown body into target-flavored markdown.
 func (r *Renderer) Preprocess(body []byte, firstLine int, ctx Context) (string, error) {
-	lines := stripComments(mdscan.Lines(body, firstLine))
+	lines := mdscan.StripComments(mdscan.Lines(body, firstLine))
 	var out []string
 	for i := 0; i < len(lines); i++ {
 		ln := lines[i]
@@ -91,50 +91,6 @@ func prefixLines(s, prefix string) string {
 		ls[i] = prefix + ls[i]
 	}
 	return strings.Join(ls, "\n")
-}
-
-// stripComments removes %%...%% comments (inline and multi-line) from prose.
-func stripComments(lines []mdscan.Line) []mdscan.Line {
-	var out []mdscan.Line
-	in := false
-	for _, ln := range lines {
-		if ln.InFence || ln.FenceOpen || ln.FenceClose {
-			if !in {
-				out = append(out, ln)
-			}
-			continue
-		}
-		if !in && !strings.Contains(ln.Text, "%%") {
-			out = append(out, ln)
-			continue
-		}
-		var b strings.Builder
-		touched := in
-		for _, seg := range mdscan.Inline(ln.Text) {
-			if seg.Code {
-				if !in {
-					b.WriteString(seg.Text)
-				}
-				continue
-			}
-			parts := strings.Split(seg.Text, "%%")
-			for k, p := range parts {
-				if k > 0 {
-					in = !in
-					touched = true
-				}
-				if !in {
-					b.WriteString(p)
-				}
-			}
-		}
-		if touched && strings.TrimSpace(b.String()) == "" {
-			continue
-		}
-		ln.Text = b.String()
-		out = append(out, ln)
-	}
-	return out
 }
 
 // rewriteLine rewrites one prose line.

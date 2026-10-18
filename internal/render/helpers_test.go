@@ -1,6 +1,8 @@
 package render
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/deweysasser/obsidian-publish-website/internal/config"
@@ -45,4 +47,15 @@ func pre(t *testing.T, r *Renderer, src string) string {
 		t.Fatal(err)
 	}
 	return out
+}
+
+func writeFile(t *testing.T, dir, rel, body string) {
+	t.Helper()
+	p := filepath.Join(dir, rel)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }

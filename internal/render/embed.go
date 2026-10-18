@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/deweysasser/obsidian-publish-website/internal/index"
+	"github.com/deweysasser/obsidian-publish-website/internal/mdscan"
 	"github.com/deweysasser/obsidian-publish-website/internal/resolve"
 )
 
@@ -121,9 +122,16 @@ func (r *Renderer) section(p, subpath string) (string, int, bool) {
 		return string(n.Body), n.BodyLine, true
 	}
 	lines := strings.Split(string(n.Raw), "\n")
-	get := func(from, to int) (string, int, bool) { // 1-based inclusive
-		to = min(to, len(lines))
-		return strings.Join(lines[from-1:to], "\n"), from, true
+	// Slice the comment-stripped note so a section can never start inside %%.
+	clean := mdscan.StripComments(mdscan.Lines(n.Raw, 1))
+	get := func(from, to int) (string, int, bool) { // 1-based inclusive file lines
+		var out []string
+		for _, l := range clean {
+			if l.Num >= from && l.Num <= to {
+				out = append(out, l.Text)
+			}
+		}
+		return strings.Join(out, "\n"), from, true
 	}
 	if strings.HasPrefix(subpath, "^") {
 		at, ok := page.Blocks[subpath[1:]]
