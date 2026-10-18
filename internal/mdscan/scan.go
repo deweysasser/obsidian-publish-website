@@ -20,7 +20,7 @@ type Line struct {
 
 var (
 	quoteRe = regexp.MustCompile(`^(\s{0,3}>\s?)+`)
-	fenceRe = regexp.MustCompile("^(\\s{0,3})(`{3,}|~{3,})\\s*([^\\s`]*)")
+	fenceRe = regexp.MustCompile("^([ \\t]*)(`{3,}|~{3,})\\s*([^\\s`]*)") // any indent: fences nest in list items
 )
 
 // Lines splits body into lines and tracks fenced code blocks, including

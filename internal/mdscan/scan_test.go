@@ -78,3 +78,10 @@ func TestBlankComments(t *testing.T) {
 		}
 	}
 }
+
+func TestFenceIndentedInListItem(t *testing.T) {
+	ls := Lines([]byte("- item\n    ```dataview\n    LIST\n    ```\n"), 1)
+	if !ls[1].FenceOpen || ls[1].Lang != "dataview" || !ls[2].InFence || !ls[3].FenceClose {
+		t.Errorf("%+v", ls)
+	}
+}

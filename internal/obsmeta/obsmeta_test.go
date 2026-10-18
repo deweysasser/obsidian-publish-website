@@ -110,3 +110,18 @@ func TestNoFrontmatterIsNull(t *testing.T) {
 		t.Errorf("frontmatter should be omitted: %s", j)
 	}
 }
+
+func TestFencesInsideListsAndCallouts(t *testing.T) {
+	m := build(t, "- item\n  ```\n  - [ ] example [[x]] #t\n  ```\n- next\n\n> [!example]\n> ```\n> y #foo [[y]]\n> ```\n\n- deep\n    ```dataview\n    - [ ] inside #bar\n    ```\n")
+	if len(m.ListItems) != 3 {
+		t.Errorf("list items %+v", m.ListItems)
+	}
+	for _, it := range m.ListItems {
+		if it.Task != nil {
+			t.Errorf("phantom task at line %d", it.Position.Start.Line)
+		}
+	}
+	if len(m.Links) != 0 || len(m.Tags) != 0 {
+		t.Errorf("code content extracted: links %+v tags %+v", m.Links, m.Tags)
+	}
+}

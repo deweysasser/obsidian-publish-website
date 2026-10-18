@@ -82,9 +82,10 @@ type CachedMetadata struct {
 }
 
 type doc struct {
-	lines []string
-	off   []int // UTF-16 offset of the start of each line
-	m     *CachedMetadata
+	fenced map[int]bool // 0-based lines that are fence open/content/close (incl. in lists and quotes)
+	lines  []string
+	off    []int // UTF-16 offset of the start of each line
+	m      *CachedMetadata
 }
 
 func (d *doc) loc(line, byteCol int) Loc {
@@ -107,7 +108,12 @@ func u16(s string) int {
 // Build computes the metadata for one note.
 func Build(n *vault.Note) *CachedMetadata {
 	raw := strings.ReplaceAll(string(n.Raw), "\r\n", "\n")
-	d := &doc{lines: strings.Split(raw, "\n"), m: &CachedMetadata{}}
+	d := &doc{lines: strings.Split(raw, "\n"), m: &CachedMetadata{}, fenced: map[int]bool{}}
+	for _, l := range mdscan.Lines([]byte(raw), 0) {
+		if l.InFence || l.FenceOpen || l.FenceClose {
+			d.fenced[l.Num] = true
+		}
+	}
 	o := 0
 	for _, l := range d.lines {
 		d.off = append(d.off, o)
@@ -319,6 +325,14 @@ func (d *doc) list(i, n, prefixLen int, quote string) int {
 			break
 		}
 		s := body(k)
+		if d.fenced[k] && k > i {
+			// code inside the item: continuation, never list items
+			if cur >= 0 {
+				d.m.ListItems[cur].Position.End = d.loc(k, len(L[k]))
+			}
+			last = k
+			continue
+		}
 		if blank(s) {
 			// a blank line continues the list only if more list content follows
 			nx := k + 1
@@ -410,6 +424,9 @@ func width(ws string) int {
 func (d *doc) inline(l1, l2 int) {
 	inComment := false
 	for k := l1; k <= l2; k++ {
+		if d.fenced[k] {
+			continue
+		}
 		masked := d.mask(d.lines[k], &inComment)
 		for _, m := range index.WikiRe.FindAllStringSubmatchIndex(masked, -1) {
 			inner := masked[m[4]:m[5]]
