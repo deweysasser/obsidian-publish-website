@@ -37,6 +37,7 @@ type Value struct {
 	Num  float64
 	Str  string
 	URL  string
+	ISO  string // dates: ISO timestamp
 	Link Link
 	List []Value
 	Keys []string
@@ -77,9 +78,10 @@ func decode(raw any) Value {
 	case map[string]any:
 		switch {
 		case x["$date"] != nil:
-			return Value{Kind: KDate, Str: str(x, "text")}
+			return Value{Kind: KDate, Str: str(x, "text"), ISO: str(x, "$date")}
 		case x["$dur"] != nil:
-			return Value{Kind: KDuration, Str: str(x, "text")}
+			ms, _ := x["$dur"].(float64)
+			return Value{Kind: KDuration, Str: str(x, "text"), Num: ms}
 		case x["$link"] != nil:
 			emb, _ := x["embed"].(bool)
 			return Value{Kind: KLink, Link: Link{Path: str(x, "$link"), Subpath: str(x, "subpath"), Type: str(x, "type"), Display: str(x, "display"), Embed: emb}}

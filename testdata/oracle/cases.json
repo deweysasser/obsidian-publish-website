@@ -1,0 +1,12 @@
+[
+  {"name": "current-open", "origin": "Town/Current Issues.md", "query": "TABLE WITHOUT ID file.link AS Issue, board AS Board, last_updated AS \"Last updated\", length(Involved) AS People FROM \"Town/Issues\" WHERE status = \"open\" SORT last_updated DESC"},
+  {"name": "group-status", "origin": "Town/Current Issues.md", "query": "TABLE WITHOUT ID status AS Status, length(rows) AS Count, rows.file.link AS Issues FROM \"Town/Issues\" WHERE status GROUP BY status SORT status ASC"},
+  {"name": "flatten-involved", "origin": "Town/Current Issues.md", "query": "TABLE person FROM \"Town/Issues\" FLATTEN Involved AS person WHERE person SORT file.name"},
+  {"name": "inlinks", "origin": "Town/Town.md", "query": "LIST FROM [[Road Repair]] SORT file.path"},
+  {"name": "outgoing", "origin": "Town/Town.md", "query": "LIST FROM outgoing([[2026-08-19 - Meeting]]) SORT file.path"},
+  {"name": "tags", "origin": "Town/Town.md", "query": "TABLE file.tags, file.etags FROM #civic SORT file.path"},
+  {"name": "tasks", "origin": "Town/Town.md", "query": "TABLE WITHOUT ID t.text AS Text, t.status AS S, t.line AS L, t.due AS Due FROM \"Town\" FLATTEN file.tasks AS t SORT t.line"},
+  {"name": "lists", "origin": "Town/Town.md", "query": "TABLE WITHOUT ID l.text AS Text, l.parent AS P, l.section AS Sec FROM \"Town/Videos\" FLATTEN file.lists AS l SORT l.line"},
+  {"name": "inline-fields", "origin": "Town/Town.md", "query": "TABLE priority, file.day FROM \"Town\" WHERE priority OR file.day SORT file.path"},
+  {"name": "file-fields", "origin": "Town/Town.md", "query": "TABLE WITHOUT ID file.name, file.folder, file.ext, length(file.outlinks) AS outs, length(file.inlinks) AS ins FROM \"Town\" SORT file.path"}
+]

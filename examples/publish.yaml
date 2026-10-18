@@ -1,0 +1,19 @@
+# Example: publish the "Town Notes" folder of a vault, leaving out People/.
+vault: ~/Documents/MyVault             # relative paths are relative to this file
+root: Town Notes                       # folder inside the vault to publish
+exclude:
+  - "**/People/**"
+target: html
+output: ./site
+search: pagefind
+site:
+  title: Town Notes
+  base_url: https://example.pages.dev/
+deploy:
+  cloudflare_pages:
+    project: example
+    # Credentials: "env:NAME", or a 1Password secret reference
+    # ("op://<vault>/<item>/<field>"; copy it from 1Password with
+    # "Copy Secret Reference"; use the item ID if its name is ambiguous).
+    account_id: env:CLOUDFLARE_ACCOUNT_ID      # a literal account ID also works
+    api_token: env:CLOUDFLARE_API_TOKEN        # never the token itself
