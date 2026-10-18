@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/deweysasser/obsidian-publish-website/internal/config"
+	"github.com/deweysasser/obsidian-publish-website/internal/search"
 	"github.com/rs/zerolog"
 )
 
@@ -133,5 +134,37 @@ func TestWarningsOnlyForPublishedTree(t *testing.T) {
 	}
 	if len(rep.Warnings) != 1 || !strings.HasPrefix(rep.Warnings[0], "R/bad.md") {
 		t.Errorf("warnings %v", rep.Warnings)
+	}
+}
+
+func TestBuildWithPagefind(t *testing.T) {
+	if _, err := search.FindPagefind(); err != nil {
+		t.Skip(err)
+	}
+	out := t.TempDir()
+	cfg := fixtureConfig(out, "html")
+	cfg.Search = "pagefind"
+	if _, err := Run(cfg, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	entry := read(t, filepath.Join(out, "pagefind/pagefind-entry.json"))
+	if !strings.Contains(entry, `"page_count":6`) {
+		t.Errorf("pagefind should index exactly the 6 note pages: %s", entry)
+	}
+	if !strings.Contains(read(t, filepath.Join(out, "index.html")), "pagefind-ui.js") {
+		t.Error("search UI not included")
+	}
+}
+
+func TestBuildPagefindMissingFailsFast(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	out := filepath.Join(t.TempDir(), "o")
+	cfg := fixtureConfig(out, "html")
+	cfg.Search = "pagefind"
+	if _, err := Run(cfg, zerolog.Nop()); err == nil || !strings.Contains(err.Error(), "pagefind") {
+		t.Fatalf("err %v", err)
+	}
+	if _, err := os.Stat(out); err == nil {
+		t.Error("output written despite missing pagefind")
 	}
 }

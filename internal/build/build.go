@@ -14,6 +14,7 @@ import (
 	"github.com/deweysasser/obsidian-publish-website/internal/dataview"
 	"github.com/deweysasser/obsidian-publish-website/internal/index"
 	"github.com/deweysasser/obsidian-publish-website/internal/render"
+	"github.com/deweysasser/obsidian-publish-website/internal/search"
 	"github.com/deweysasser/obsidian-publish-website/internal/selector"
 	"github.com/deweysasser/obsidian-publish-website/internal/target"
 	"github.com/deweysasser/obsidian-publish-website/internal/target/html"
@@ -46,6 +47,12 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 	tgt, err := newTarget(cfg, warn)
 	if err != nil {
 		return nil, err
+	}
+	pagefind := ""
+	if cfg.Search == "pagefind" && cfg.Target == "html" {
+		if pagefind, err = search.FindPagefind(); err != nil {
+			return nil, err
+		}
 	}
 
 	start := time.Now()
@@ -115,6 +122,11 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 	}
 	if err := tgt.Finalize(site); err != nil {
 		return nil, err
+	}
+	if pagefind != "" {
+		if err := search.RunPagefind(pagefind, cfg.Output, log); err != nil {
+			return nil, err
+		}
 	}
 	rep.Pages, rep.Assets = len(site.Pages), len(site.Assets)
 	log.Info().Int("pages", rep.Pages).Int("assets", rep.Assets).Int("warnings", len(rep.Warnings)).
