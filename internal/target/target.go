@@ -184,7 +184,7 @@ func ExportFrontmatter(fm map[string]any) map[string]any {
 func exportValue(v any) any {
 	switch x := v.(type) {
 	case time.Time:
-		if x.Hour() == 0 && x.Minute() == 0 && x.Second() == 0 && x.Nanosecond() == 0 {
+		if x.Location() == time.UTC && x.Hour() == 0 && x.Minute() == 0 && x.Second() == 0 && x.Nanosecond() == 0 {
 			return x.Format("2006-01-02")
 		}
 		return x.Format(time.RFC3339)

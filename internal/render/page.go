@@ -26,7 +26,7 @@ type Page struct {
 	Mtime       time.Time
 }
 
-var h1Re = regexp.MustCompile(`^#\s+(.+?)\s*#*\s*$`)
+var h1Re = regexp.MustCompile(`^#\s+(.+?)(?:\s+#+)?\s*$`)
 
 // Render renders one published note to target Markdown. Call Finish (after
 // any transforms) to produce HTML.
@@ -48,7 +48,7 @@ func (r *Renderer) Render(p string) (*Page, error) {
 			page.Title, body = title, rest
 		}
 	}
-	mdText, err := r.Preprocess(body, n.BodyLine, Context{Path: p})
+	mdText, err := r.Preprocess(body, n.BodyLine, Context{Path: p, Stack: []string{p}})
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", p, err)
 	}

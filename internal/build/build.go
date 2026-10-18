@@ -4,6 +4,7 @@ package build
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -49,6 +50,11 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 	tgt, err := newTarget(cfg, warn, log)
 	if err != nil {
 		return nil, err
+	}
+	if cfg.Target == "html" {
+		if u, err := url.Parse(cfg.Site.BaseURL); err != nil || u.Scheme == "" || u.Host == "" {
+			warn("site.base_url is not an absolute URL; sitemap.xml will not be written")
+		}
 	}
 	pagefind := ""
 	if cfg.Search == "pagefind" && cfg.Target == "html" {

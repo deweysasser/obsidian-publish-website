@@ -2,8 +2,11 @@ package render
 
 import (
 	"fmt"
+	"html"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/deweysasser/obsidian-publish-website/internal/mdscan"
 )
@@ -36,7 +39,8 @@ func (r *Renderer) callout(lines []mdscan.Line, i int, ctx Context) (string, int
 	}
 	title := strings.TrimSpace(m[3])
 	if title == "" {
-		title = strings.ToUpper(kind[:1]) + kind[1:]
+		r0, size := utf8.DecodeRuneInString(kind)
+		title = string(unicode.ToUpper(r0)) + kind[size:]
 	}
 	j := i + 1
 	var inner []string
@@ -53,7 +57,7 @@ func (r *Renderer) callout(lines []mdscan.Line, i int, ctx Context) (string, int
 		}
 	}
 	titleMD := r.rewriteLine(mdscan.Line{Text: title, Num: lines[i].Num}, ctx)
-	attr := fmt.Sprintf(`class="callout" data-callout="%s"`, canon)
+	attr := fmt.Sprintf(`class="callout" data-callout="%s"`, html.EscapeString(canon))
 	contentAttr, titleAttr := `class="callout-content"`, `class="callout-title"`
 	if r.Mode == ModeMarkdown { // kramdown only parses markdown inside HTML with markdown="1"
 		contentAttr += ` markdown="1"`

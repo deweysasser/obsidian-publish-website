@@ -38,7 +38,7 @@ func (r *Renderer) CollectQueries() ([]dataview.Request, error) {
 			continue
 		}
 		n := r.Ix.Pages[p].Note
-		if _, err := r.Preprocess(n.Body, n.BodyLine, Context{Path: p}); err != nil {
+		if _, err := r.Preprocess(n.Body, n.BodyLine, Context{Path: p, Stack: []string{p}}); err != nil {
 			return nil, err
 		}
 	}

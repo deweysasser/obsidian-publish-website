@@ -88,3 +88,16 @@ func TestEmbedSectionInsideComment(t *testing.T) {
 		t.Errorf("open section missing: %q", got)
 	}
 }
+
+func TestSelfEmbedNotExpanded(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "Town/A.md", "ONCE ![[A]]")
+	r, _ := newTestRenderer(t, dir, ModeHTML)
+	p, err := renderFull(r, "Town/A.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(p.HTML, "ONCE") != 1 {
+		t.Errorf("self-embed expanded:\n%s", p.HTML)
+	}
+}

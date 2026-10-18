@@ -132,6 +132,11 @@ func (c *Config) Validate() error {
 	default:
 		errs = append(errs, fmt.Errorf("search %q must be pagefind or none", c.Search))
 	}
+	for name, v := range map[string]string{"hugo.section": c.Hugo.Section, "jekyll.collection": c.Jekyll.Collection} {
+		if v != "" && (strings.ContainsAny(v, `/\`) || v == "." || v == "..") {
+			errs = append(errs, fmt.Errorf("%s %q must be a single path segment", name, v))
+		}
+	}
 	switch c.Dataview {
 	case "node", "none", "":
 	default:

@@ -94,3 +94,22 @@ func TestJekyllBuildsSite(t *testing.T) {
 		t.Errorf("tables missing in jekyll output:\n%s", ci)
 	}
 }
+
+func TestJekyllRawVariantsEscaped(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "R"), 0o755)
+	os.WriteFile(filepath.Join(dir, "R", "a.md"), []byte("a {%endraw%} b {%- endraw -%} c {%  endraw  %} {{ site.x }}"), 0o644)
+	out := t.TempDir()
+	cfg := &config.Config{Vault: dir, Root: "R", Target: "jekyll", Output: out}
+	cfg.ApplyDefaults()
+	if _, err := build.Run(cfg, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	got := read(t, filepath.Join(out, "_r/a.md"))
+	body := strings.TrimSuffix(got, "{% endraw %}\n")
+	for _, v := range []string{"{%endraw%}", "{%- endraw -%}", "{%  endraw  %}"} {
+		if strings.Contains(body, v+" ") || strings.Contains(body, v+"b") {
+			t.Errorf("%q not neutralized:\n%s", v, got)
+		}
+	}
+}

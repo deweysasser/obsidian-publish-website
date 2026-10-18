@@ -110,3 +110,11 @@ func TestWikilinkInTable(t *testing.T) {
 		t.Errorf("got %q warns %v", got, *warns)
 	}
 }
+
+func TestNULInputDoesNotPanic(t *testing.T) {
+	r, _ := fixtureRenderer(t)
+	got := pre(t, r, "a \x000\x00 [[Road Repair]] \x001\x00")
+	if strings.Contains(got, "\x00") || !strings.Contains(got, "(/c/issues/road-repair/)") {
+		t.Errorf("got %q", got)
+	}
+}

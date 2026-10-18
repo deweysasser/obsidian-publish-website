@@ -168,3 +168,12 @@ func TestBuildPagefindMissingFailsFast(t *testing.T) {
 		t.Error("output written despite missing pagefind")
 	}
 }
+
+func TestStrictCountsSitemapWarning(t *testing.T) {
+	cfg := fixtureConfig(filepath.Join(t.TempDir(), "o"), "html")
+	cfg.Site.BaseURL = ""
+	cfg.Strict = true
+	if _, err := Run(cfg, zerolog.Nop()); err == nil || !strings.Contains(err.Error(), "base_url") {
+		t.Fatalf("err %v", err)
+	}
+}

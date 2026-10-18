@@ -213,8 +213,7 @@ type urlEntry struct {
 func (t *Target) writeSitemap(s *target.Site) error {
 	u, err := url.Parse(s.Config.Site.BaseURL)
 	if err != nil || u.Scheme == "" || u.Host == "" {
-		t.Warn("site.base_url is not an absolute URL; sitemap.xml not written")
-		return nil
+		return nil // warned at build start
 	}
 	origin := u.Scheme + "://" + u.Host
 	var entries []urlEntry

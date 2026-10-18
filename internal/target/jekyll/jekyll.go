@@ -5,6 +5,7 @@ package jekyll
 import (
 	"fmt"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/deweysasser/obsidian-publish-website/internal/config"
@@ -14,6 +15,9 @@ import (
 	"github.com/deweysasser/obsidian-publish-website/internal/urls"
 	"gopkg.in/yaml.v3"
 )
+
+// endrawRe matches every spelling Liquid accepts as the raw terminator.
+var endrawRe = regexp.MustCompile(`\{%-?\s*endraw\s*-?%\}`)
 
 // ConfigFile is the collection config snippet written next to the export.
 const ConfigFile = "_config.obsidian-publish.yml"
@@ -105,7 +109,9 @@ func (t *Target) write(rel string, fm *yaml.Node, body string) error {
 	}
 	// {% raw %} keeps Liquid from interpreting {{ }} / {% %} in notes; a
 	// literal {% endraw %} is split so the raw block cannot be closed early.
-	body = strings.ReplaceAll(body, "{% endraw %}", "{% endraw %}{{ '{% endraw %}' }}{% raw %}")
+	body = endrawRe.ReplaceAllStringFunc(body, func(m string) string {
+		return "{% endraw %}{{ '" + strings.ReplaceAll(m, "'", "") + "' }}{% raw %}"
+	})
 	doc := "---\n" + string(head) + "---\n{% raw %}\n" + body + "\n{% endraw %}\n"
 	return target.WriteFile(t.docs, rel, []byte(doc))
 }

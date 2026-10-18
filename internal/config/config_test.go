@@ -93,3 +93,19 @@ func TestValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateSectionAndCollection(t *testing.T) {
+	for _, bad := range []string{"../x", "a/b", "", "."} {
+		c := &Config{Vault: "/v", Root: "R", Target: "hugo", Search: "none", Hugo: Hugo{Section: bad}, Jekyll: Jekyll{Collection: "ok"}}
+		if bad == "" {
+			continue
+		}
+		if err := c.Validate(); err == nil {
+			t.Errorf("section %q accepted", bad)
+		}
+		c.Hugo.Section, c.Jekyll.Collection = "ok", bad
+		if err := c.Validate(); err == nil {
+			t.Errorf("collection %q accepted", bad)
+		}
+	}
+}

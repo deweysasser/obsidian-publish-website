@@ -1,6 +1,7 @@
 package render
 
 import (
+	"bytes"
 	"fmt"
 	"html"
 	"regexp"
@@ -20,6 +21,8 @@ var (
 
 // Preprocess rewrites an Obsidian markdown body into target-flavored markdown.
 func (r *Renderer) Preprocess(body []byte, firstLine int, ctx Context) (string, error) {
+	// NUL is reserved for internal placeholders
+	body = bytes.ReplaceAll(body, []byte{0}, nil)
 	lines := mdscan.StripComments(mdscan.Lines(body, firstLine))
 	var out []string
 	for i := 0; i < len(lines); i++ {

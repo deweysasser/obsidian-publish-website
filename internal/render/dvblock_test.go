@@ -94,3 +94,14 @@ func TestDataviewDisabled(t *testing.T) {
 		t.Errorf("html %s warns %v", p.HTML, *warns)
 	}
 }
+
+func TestFormatValueExternalLinkSchemes(t *testing.T) {
+	r, _ := fixtureRenderer(t)
+	for u, linked := range map[string]bool{"javascript:alert(1)": false, " JavaScript:x": false, "data:text/html,x": false, "vbscript:x": false,
+		"https://e.com": true, "mailto:a@b.c": true} {
+		got := r.formatValue(dataview.Value{Kind: dataview.KExternalLink, URL: u, Str: "t"}, Context{})
+		if strings.Contains(got, "<a") != linked {
+			t.Errorf("%q → %s", u, got)
+		}
+	}
+}

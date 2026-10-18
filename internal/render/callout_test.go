@@ -44,3 +44,15 @@ func TestCalloutWithFence(t *testing.T) {
 		t.Errorf("got\n%s", got)
 	}
 }
+
+func TestCalloutTypeEscapedAndUnicodeTitle(t *testing.T) {
+	r, _ := fixtureRenderer(t)
+	got := pre(t, r, "> [!x\"onmouseover=\"alert(1)]\n> body")
+	if strings.Contains(got, `data-callout="x"`) {
+		t.Errorf("attribute injection: %s", got)
+	}
+	got = pre(t, r, "> [!éclair]\n> b")
+	if !strings.Contains(got, "Éclair") {
+		t.Errorf("unicode default title: %s", got)
+	}
+}

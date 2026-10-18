@@ -125,3 +125,13 @@ func TestHeadingIDsIgnoreGeneratedHTML(t *testing.T) {
 		t.Errorf("toc %+v", toc)
 	}
 }
+
+func TestTitleKeepsTrailingHash(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "Town/x.md", "# Learn C#\nbody")
+	r, _ := newTestRenderer(t, dir, ModeHTML)
+	p, _ := renderFull(r, "Town/x.md")
+	if p.Title != "Learn C#" {
+		t.Errorf("title %q", p.Title)
+	}
+}
