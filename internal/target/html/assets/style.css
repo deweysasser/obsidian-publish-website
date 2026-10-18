@@ -123,3 +123,12 @@ li:has(> input[type=checkbox]) > input { margin: 0 .4em 0 -1.3em; }
 }
 .search .pagefind-ui__drawer:not(:has(*)) { display: none; }
 .search { --pagefind-ui-scale: .8; --pagefind-ui-primary: var(--accent); --pagefind-ui-text: var(--fg); --pagefind-ui-background: var(--bg); --pagefind-ui-border: var(--border); --pagefind-ui-tag: var(--bg-alt); }
+
+/* ```transcript blocks */
+details.transcript { border: 1px solid var(--border); border-radius: 6px; margin: 1rem 0; }
+details.transcript > summary { cursor: pointer; padding: .5rem .8rem; font-weight: 600; background: var(--bg-alt); border-radius: 6px; }
+details.transcript[open] > summary { border-bottom: 1px solid var(--border); border-radius: 6px 6px 0 0; }
+.transcript-lines { padding: .4rem .8rem; }
+.transcript-lines .tl { display: grid; grid-template-columns: 4.5em 1fr; gap: .75em; margin: 0; padding: .15rem 0; line-height: 1.5; }
+.transcript-lines .ts { font-variant-numeric: tabular-nums; color: var(--muted); text-align: right; font-size: .9em; padding-top: .1em; }
+.transcript-lines a.ts:hover { color: var(--link); }

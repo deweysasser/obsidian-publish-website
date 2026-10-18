@@ -83,6 +83,7 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 	r := render.NewRenderer(ix, pub, tgt.Scheme(), tgt.Mode(), func(p string, line int, msg string) {
 		warn(fmt.Sprintf("%s:%d: %s", p, line, msg))
 	})
+	r.StrictLineBreaks = vault.StrictLineBreaks(cfg.Vault)
 	if err := evaluateDataview(cfg, r, ix, log); err != nil {
 		return nil, err
 	}

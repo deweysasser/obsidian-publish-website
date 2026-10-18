@@ -23,17 +23,27 @@ type TOCEntry struct {
 	ID    string
 }
 
-var md = goldmark.New(
-	goldmark.WithExtensions(extension.GFM, extension.Footnote),
-	goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(headingIDTransformer{}, 100))),
-	goldmark.WithRendererOptions(
-		ghtml.WithUnsafe(),
-		renderer.WithNodeRenderers(util.Prioritized(&codeRenderer{}, 100)),
-	),
-)
+// mdObsidian keeps single newlines as line breaks (Obsidian's default);
+// mdStrict follows CommonMark ("Strict line breaks" on in Obsidian).
+var mdObsidian, mdStrict = newMarkdown(ghtml.WithHardWraps()), newMarkdown()
+
+func newMarkdown(opts ...renderer.Option) goldmark.Markdown {
+	return goldmark.New(
+		goldmark.WithExtensions(extension.GFM, extension.Footnote),
+		goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(headingIDTransformer{}, 100))),
+		goldmark.WithRendererOptions(append(opts,
+			ghtml.WithUnsafe(),
+			renderer.WithNodeRenderers(util.Prioritized(&codeRenderer{}, 100)),
+		)...),
+	)
+}
 
 // MarkdownToHTML renders preprocessed markdown and returns the HTML and TOC.
 func (r *Renderer) MarkdownToHTML(src string) (string, []TOCEntry, error) {
+	md := mdObsidian
+	if r.StrictLineBreaks {
+		md = mdStrict
+	}
 	source := []byte(src)
 	doc := md.Parser().Parse(text.NewReader(source))
 	var toc []TOCEntry

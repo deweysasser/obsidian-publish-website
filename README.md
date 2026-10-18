@@ -109,6 +109,34 @@ sizes, callouts (all types and aliases, foldable, nested), `==highlights==`,
 fields (`key:: value`, `[key:: value]`, `(key:: value)`), task lists,
 footnotes, tables, math, Mermaid, and the `folder-index-content` block.
 
+Line breaks follow the vault's "Strict line breaks" setting
+(`.obsidian/app.json`): by default, as in Obsidian, a single newline is a
+line break. For hugo/jekyll set the equivalent in that generator (Hugo
+`markup.goldmark.renderer.hardWraps = true`, kramdown `hard_wrap: true`).
+
+### Transcripts
+
+A fenced `transcript` block renders as a collapsible timeline:
+
+````markdown
+```transcript
+0:07 | Hi there.
+1:02:03 | Later remark.
+```
+````
+
+Lines may start with `m:ss`, `h:mm:ss` or `[m:ss]`, optionally followed by
+`|` or `-`. Text is literal (no links or formatting), as Obsidian shows it.
+If the note's `video` or `url` frontmatter is a YouTube URL, timestamps link
+to that moment. To make the block readable in Obsidian too, add a CSS
+snippet:
+
+```css
+.block-language-transcript, pre.language-transcript, pre.language-transcript code {
+  white-space: pre-wrap; font-family: var(--font-text);
+}
+```
+
 ## Dataview
 
 How it works: `tools/dataview-bridge` bundles Dataview's own page parser and

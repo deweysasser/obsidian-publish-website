@@ -39,6 +39,9 @@ type Renderer struct {
 	Warn func(path string, line int, msg string)
 
 	MaxEmbedDepth int // 0 = DefaultMaxEmbedDepth
+	// StrictLineBreaks mirrors Obsidian's setting: when false (the default),
+	// single newlines render as line breaks (html target only).
+	StrictLineBreaks bool
 
 	fenceHooks map[string]FenceHook
 	inlineHook func(code string, line int, ctx Context) (string, bool)
@@ -60,6 +63,7 @@ func NewRenderer(ix *index.Index, pub *selector.Published, u urls.Scheme, mode M
 	r.fenceHooks["folder-index-content"] = r.folderIndexHook
 	r.fenceHooks["dataview"] = r.dvBlock
 	r.fenceHooks["dataviewjs"] = r.dvJS
+	r.fenceHooks["transcript"] = r.transcriptBlock
 	r.inlineHook = r.dvInline
 	return r
 }
