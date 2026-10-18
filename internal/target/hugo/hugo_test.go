@@ -16,6 +16,7 @@ func buildFixture(t *testing.T, out string) {
 	t.Helper()
 	cfg := &config.Config{Vault: "../../../testdata/fixture-vault", Root: "Town", Exclude: []string{"People/**"},
 		Target: "hugo", Output: out, Site: config.Site{Title: "T", BaseURL: "https://x.io/"}}
+	cfg.ExportFrontmatter = true
 	cfg.ApplyDefaults()
 	if _, err := build.Run(cfg, zerolog.Nop()); err != nil {
 		t.Fatal(err)

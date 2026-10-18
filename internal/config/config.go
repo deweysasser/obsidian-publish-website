@@ -45,6 +45,10 @@ type Config struct {
 	Jekyll     Jekyll   `yaml:"jekyll"`
 	HTML       HTML     `yaml:"html"`
 	Transforms []string `yaml:"transforms"`
+	// ExportFrontmatter copies each note's frontmatter under an "obsidian"
+	// key in hugo/jekyll exports. Off by default: properties often hold data
+	// that is not meant to be published.
+	ExportFrontmatter bool `yaml:"export_frontmatter"`
 
 	Strict bool `yaml:"-"`
 }

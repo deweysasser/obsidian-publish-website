@@ -92,7 +92,7 @@ func (t *Target) WritePage(s *target.Site, p *render.Page) error {
 		}
 		add("tags", tags)
 	}
-	if len(p.Frontmatter) > 0 {
+	if t.cfg.ExportFrontmatter && len(p.Frontmatter) > 0 {
 		add("obsidian", target.ExportFrontmatter(p.Frontmatter))
 	}
 	return t.write(t.file(s, p.Slug), fm, p.Markdown)
