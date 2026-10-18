@@ -39,6 +39,7 @@ type Config struct {
 	Target     string   `yaml:"target"`
 	Output     string   `yaml:"output"`
 	Search     string   `yaml:"search"`
+	Dataview   string   `yaml:"dataview"`
 	Site       Site     `yaml:"site"`
 	Hugo       Hugo     `yaml:"hugo"`
 	Jekyll     Jekyll   `yaml:"jekyll"`
@@ -88,6 +89,9 @@ func (c *Config) ApplyDefaults() {
 	if c.Search == "" {
 		c.Search = "pagefind"
 	}
+	if c.Dataview == "" {
+		c.Dataview = "node"
+	}
 	c.Root = strings.Trim(c.Root, "/")
 	if c.Hugo.Section == "" {
 		c.Hugo.Section = simpleSlug(path.Base(c.Root))
@@ -116,6 +120,11 @@ func (c *Config) Validate() error {
 	case "pagefind", "none":
 	default:
 		errs = append(errs, fmt.Errorf("search %q must be pagefind or none", c.Search))
+	}
+	switch c.Dataview {
+	case "node", "none", "":
+	default:
+		errs = append(errs, fmt.Errorf("dataview %q must be node or none", c.Dataview))
 	}
 	for _, g := range c.Exclude {
 		if !doublestar.ValidatePattern(g) {
