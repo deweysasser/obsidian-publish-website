@@ -137,6 +137,11 @@ func TestPublishFlagFailsClosed(t *testing.T) {
 	if publishFalse(map[string]any{}) || publishFalse(nil) {
 		t.Error("absent key should publish")
 	}
+	for i := 0; i < 50; i++ {
+		if !publishFalse(map[string]any{"publish": true, "Publish": false, "PUBLISH": "yes"}) {
+			t.Fatal("any unpublish value among case-variant keys must win")
+		}
+	}
 	if !publishFalse(map[string]any{"Publish": "no"}) {
 		t.Error("key is case-insensitive")
 	}
