@@ -66,6 +66,13 @@ func Select(ix *index.Index, cfg *config.Config) (*Published, error) {
 			pub.Folders[path.Join(cfg.Root, d)] = SlugPath(d)
 		}
 	}
+	// "Folder note outside": X.md next to folder X/ is that folder's page.
+	for p, slug := range pub.Pages {
+		folder := strings.TrimSuffix(p, path.Ext(p))
+		if _, isFolder := pub.Folders[folder]; isFolder && pub.folderNotes[folder] == "" && pub.Folders[folder] == slug {
+			pub.folderNotes[folder] = p
+		}
+	}
 	if len(pub.Pages) == 0 {
 		return nil, fmt.Errorf("no notes to publish under %q", cfg.Root)
 	}

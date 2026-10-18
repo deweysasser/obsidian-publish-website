@@ -115,15 +115,21 @@ func BuildTree(pub *selector.Published, pages []*render.Page, u urls.Scheme) *Fo
 			parent.Folders = append(parent.Folders, n)
 		}
 	}
+	noteOf := map[string]string{} // page path → folder it is the note of
+	for folder := range nodes {
+		if fn := pub.FolderNote(folder); fn != "" {
+			noteOf[fn] = folder
+		}
+	}
 	for _, p := range pages {
-		folder := path.Dir(p.SourcePath)
-		if fn := pub.FolderNote(folder); fn == p.SourcePath && nodes[folder] != nil {
+		if folder, ok := noteOf[p.SourcePath]; ok {
 			nodes[folder].Page = p
 			if folder != pub.Root {
 				nodes[folder].Name = p.Title
 			}
 			continue
 		}
+		folder := path.Dir(p.SourcePath)
 		if n := nodes[folder]; n != nil {
 			n.Pages = append(n.Pages, p)
 		}

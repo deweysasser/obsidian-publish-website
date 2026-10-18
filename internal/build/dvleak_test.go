@@ -103,3 +103,24 @@ func TestDataviewSettingsApplyToCollection(t *testing.T) {
 		t.Errorf("custom inline prefix not evaluated: warnings %v\n%s", rep.Warnings, b)
 	}
 }
+
+func TestSiblingFolderNoteNotOverwritten(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "R", "Projects"), 0o755)
+	os.WriteFile(filepath.Join(dir, "R", "Projects.md"), []byte("SIBLING CONTENT"), 0o644)
+	os.WriteFile(filepath.Join(dir, "R", "Projects", "Plan.md"), []byte("plan"), 0o644)
+	out := t.TempDir()
+	cfg := fixtureConfig(out, "html")
+	cfg.Vault, cfg.Root, cfg.Exclude = dir, "R", nil
+	if _, err := Run(cfg, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(out, "projects/index.html"))
+	if !strings.Contains(string(b), "SIBLING CONTENT") {
+		t.Errorf("sibling note overwritten:\n%s", b)
+	}
+	home, _ := os.ReadFile(filepath.Join(out, "index.html"))
+	if strings.Count(string(home), `href="/c/projects/"`) < 1 {
+		t.Error("folder missing from home listing")
+	}
+}
