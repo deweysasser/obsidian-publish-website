@@ -89,3 +89,22 @@ tools:
 	go install honnef.co/go/tools/cmd/staticcheck@latest
 	go install github.com/go-critic/go-critic/cmd/gocritic@latest
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+# --- Publishing (Cloudflare Pages). Settings usually live in publish.local.mk:
+#   PUBLISH_CONFIG, PAGES_PROJECT, CLOUDFLARE_API_TOKEN_REF, CLOUDFLARE_ACCOUNT_ID[_REF]
+-include publish.local.mk
+PUBLISH_CONFIG ?= publish.yaml
+PUBLISH_OUTPUT ?= public
+PAGES_BRANCH ?= main
+export CLOUDFLARE_API_TOKEN_REF CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_ACCOUNT_ID_REF
+
+.PHONY: publish-tools site publish
+publish-tools:
+	$(DOCKER) build -q --network host -t obsidian-publish-tools tools/publish
+
+site: $(PROGRAM) publish-tools
+	PATH="$(CURDIR)/tools/publish:$$PATH" $(PROGRAM) build -c $(PUBLISH_CONFIG) -o $(PUBLISH_OUTPUT) --strict
+
+publish: site
+	@test -n "$(PAGES_PROJECT)" || { echo "set PAGES_PROJECT" >&2; exit 2; }
+	SITE=$(PUBLISH_OUTPUT) tools/publish/wrangler pages deploy /site --project-name $(PAGES_PROJECT) --branch $(PAGES_BRANCH) --commit-dirty=true

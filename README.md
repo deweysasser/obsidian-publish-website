@@ -151,6 +151,25 @@ Not supported (render a placeholder and a warning): `dataviewjs`, inline
 
 Upgrade Dataview: see `tools/dataview-bridge/README.md`.
 
+## Publishing to Cloudflare Pages
+
+`make publish` builds the site and deploys it with wrangler. Pagefind and
+wrangler run from a locally built, pinned image (`tools/publish/Dockerfile`),
+so no npm code runs on the host. The API token is read with `op read` and
+streamed to the container on stdin; it is never written to disk or passed
+as a container environment variable. Put settings in `publish.local.mk`
+(git-ignored):
+
+```make
+PUBLISH_CONFIG = my.publish.yaml
+PAGES_PROJECT = my-project
+CLOUDFLARE_API_TOKEN_REF = op://Vault/Item/token-field
+CLOUDFLARE_ACCOUNT_ID_REF = op://Vault/Item/account-id-field   # or CLOUDFLARE_ACCOUNT_ID = ...
+```
+
+The token needs only *Account → Cloudflare Pages → Edit*. Create the project
+once with `tools/publish/wrangler pages project create NAME --production-branch main`.
+
 ## Development
 
 ```bash
