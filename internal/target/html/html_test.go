@@ -54,3 +54,32 @@ func TestTemplateOverride(t *testing.T) {
 		t.Errorf("got %q", b)
 	}
 }
+
+func TestTitleNotRepeatedWhenPageTitleIsSiteTitle(t *testing.T) {
+	out := t.TempDir()
+	cfg := &config.Config{Output: out, Search: "none", Site: config.Site{Title: "Local Politics"}}
+	tg, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	site := &target.Site{Config: cfg, Tree: &target.FolderNode{}}
+	for _, p := range []*render.Page{{Slug: "", URL: "/", Title: "Local Politics"}, {Slug: "a", URL: "/a/", Title: "A"}} {
+		if err := tg.WritePage(site, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	home, _ := os.ReadFile(filepath.Join(out, "index.html"))
+	a, _ := os.ReadFile(filepath.Join(out, "a/index.html"))
+	if !strings.Contains(string(home), "<title>Local Politics</title>") || !strings.Contains(string(a), "<title>A · Local Politics</title>") {
+		t.Errorf("titles: %q / %q", grepTitle(home), grepTitle(a))
+	}
+}
+
+func grepTitle(b []byte) string {
+	s := string(b)
+	i, j := strings.Index(s, "<title>"), strings.Index(s, "</title>")
+	if i < 0 || j < i {
+		return ""
+	}
+	return s[i : j+8]
+}
