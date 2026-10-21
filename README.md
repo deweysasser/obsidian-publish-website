@@ -165,8 +165,8 @@ deploy:
   cloudflare_pages:
     project: my-site                          # create once: wrangler pages project create my-site
     branch: main                              # default
-    account_id: op://<vault>/<item>/<field>
-    api_token: op://<vault>/<item>/<field>
+    account_id: env:CLOUDFLARE_ACCOUNT_ID     # or op://<vault>/<item>/<field>
+    api_token: op://<vault>/<item>/<field>    # or env:CLOUDFLARE_API_TOKEN
 ```
 
 `account_id` and `api_token` take a 1Password reference (`op://…`, read
