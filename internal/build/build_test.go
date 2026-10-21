@@ -9,7 +9,6 @@ import (
 
 	"github.com/deweysasser/obsidian-publish-website/internal/config"
 	"github.com/deweysasser/obsidian-publish-website/internal/dataview"
-	"github.com/deweysasser/obsidian-publish-website/internal/search"
 	"github.com/rs/zerolog"
 )
 
@@ -143,12 +142,14 @@ func TestWarningsOnlyForPublishedTree(t *testing.T) {
 }
 
 func TestBuildWithPagefind(t *testing.T) {
-	if _, err := search.FindPagefind(); err != nil {
-		t.Skip(err)
+	mode := os.Getenv("OBSIDIAN_PUBLISH_TOOLS_RUNNER")
+	if mode == "" {
+		t.Skip("set OBSIDIAN_PUBLISH_TOOLS_RUNNER=docker|host to run pagefind")
 	}
 	out := t.TempDir()
 	cfg := fixtureConfig(out, "html")
 	cfg.Search = "pagefind"
+	cfg.Tools.Runner = mode
 	if _, err := Run(cfg, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
@@ -163,14 +164,17 @@ func TestBuildWithPagefind(t *testing.T) {
 
 func TestBuildPagefindMissingFailsFast(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	out := filepath.Join(t.TempDir(), "o")
-	cfg := fixtureConfig(out, "html")
-	cfg.Search = "pagefind"
-	if _, err := Run(cfg, zerolog.Nop()); err == nil || !strings.Contains(err.Error(), "pagefind") {
-		t.Fatalf("err %v", err)
-	}
-	if _, err := os.Stat(out); err == nil {
-		t.Error("output written despite missing pagefind")
+	for runner, want := range map[string]string{"host": "pagefind", "docker": "docker"} {
+		out := filepath.Join(t.TempDir(), "o")
+		cfg := fixtureConfig(out, "html")
+		cfg.Search = "pagefind"
+		cfg.Tools.Runner = runner
+		if _, err := Run(cfg, zerolog.Nop()); err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("%s: err %v", runner, err)
+		}
+		if _, err := os.Stat(out); err == nil {
+			t.Errorf("%s: output written despite missing tool", runner)
+		}
 	}
 }
 

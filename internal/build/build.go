@@ -2,6 +2,7 @@
 package build
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -21,6 +22,7 @@ import (
 	"github.com/deweysasser/obsidian-publish-website/internal/target/html"
 	"github.com/deweysasser/obsidian-publish-website/internal/target/hugo"
 	"github.com/deweysasser/obsidian-publish-website/internal/target/jekyll"
+	"github.com/deweysasser/obsidian-publish-website/internal/tools"
 	"github.com/deweysasser/obsidian-publish-website/internal/transform"
 	"github.com/deweysasser/obsidian-publish-website/internal/vault"
 	"github.com/rs/zerolog"
@@ -56,9 +58,10 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 			warn("site.base_url is not an absolute URL; sitemap.xml will not be written")
 		}
 	}
-	pagefind := ""
+	var runner tools.Runner
 	if cfg.Search == "pagefind" && cfg.Target == "html" {
-		if pagefind, err = search.FindPagefind(); err != nil {
+		runner = tools.New(cfg.Tools.Runner, cfg.Tools.Image)
+		if err := runner.Check("pagefind"); err != nil {
 			return nil, err
 		}
 	}
@@ -136,8 +139,8 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 	if err := tgt.Finalize(site); err != nil {
 		return nil, err
 	}
-	if pagefind != "" {
-		if err := search.RunPagefind(pagefind, cfg.Output, log); err != nil {
+	if runner != nil {
+		if err := search.RunPagefind(context.Background(), runner, cfg.Output, log); err != nil {
 			return nil, err
 		}
 	}

@@ -27,7 +27,7 @@ Runtime requirements:
 | Needed for | Requirement |
 |---|---|
 | Dataview queries | Node.js ≥ 18 on `PATH` (or `dataview: none`) |
-| Search (html target) | [Pagefind](https://pagefind.app) on `PATH` — `npm i -g pagefind` (or `search: none`) |
+| Search (html target), deploy | Docker (or `tools.runner: host` with Pagefind / wrangler on `PATH`; or `search: none`) |
 
 ## Usage
 
@@ -151,24 +151,43 @@ Not supported (render a placeholder and a warning): `dataviewjs`, inline
 
 Upgrade Dataview: see `tools/dataview-bridge/README.md`.
 
-## Publishing to Cloudflare Pages
+## Publishing
 
-`make publish` builds the site and deploys it with wrangler. Pagefind and
-wrangler run from a locally built, pinned image (`tools/publish/Dockerfile`),
-so no npm code runs on the host. The API token is read with `op read` and
-streamed to the container on stdin; it is never written to disk or passed
-as a container environment variable. Put settings in `publish.local.mk`
-(git-ignored):
-
-```make
-PUBLISH_CONFIG = my.publish.yaml
-PAGES_PROJECT = my-project
-CLOUDFLARE_API_TOKEN_REF = op://Vault/Item/token-field
-CLOUDFLARE_ACCOUNT_ID_REF = op://Vault/Item/account-id-field   # or CLOUDFLARE_ACCOUNT_ID = ...
+```bash
+obsidian-publish-website publish -c publish.yaml   # build, then deploy
+obsidian-publish-website deploy  -c publish.yaml   # deploy the last build
 ```
 
-The token needs only *Account → Cloudflare Pages → Edit*. Create the project
-once with `tools/publish/wrangler pages project create NAME --production-branch main`.
+Cloudflare Pages is supported via `wrangler pages deploy`:
+
+```yaml
+deploy:
+  cloudflare_pages:
+    project: my-site                          # create once: wrangler pages project create my-site
+    branch: main                              # default
+    account_id: op://<vault>/<item>/<field>
+    api_token: op://<vault>/<item>/<field>
+```
+
+`account_id` and `api_token` take a 1Password reference (`op://…`, read
+with the `op` CLI), `env:NAME`, or, for `account_id` only, the literal
+value. The token is never accepted inline, and is never put in a process
+argument or container configuration: the docker runner hands it to the
+container on stdin. It needs only *Account → Cloudflare Pages → Edit*.
+`deploy` refuses to upload a directory this program did not build.
+
+### External tools
+
+Pagefind and wrangler run, by default, from a container image built on first
+use from a Dockerfile embedded in the binary (pinned Node, wrangler and
+pagefind versions), so no npm code runs on the host. Pagefind runs without
+network access.
+
+```yaml
+tools:
+  runner: docker   # default; or "host" to use pagefind/wrangler from PATH
+  image: ""        # optional: use this pre-built image instead
+```
 
 ## Development
 

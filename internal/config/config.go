@@ -32,6 +32,29 @@ type HTML struct {
 	TemplateDir string `yaml:"template_dir"`
 }
 
+// Tools selects how external programs (pagefind, wrangler) run.
+type Tools struct {
+	// Runner is "docker" (default: a pinned image built from the Dockerfile
+	// embedded in this program) or "host" (programs on PATH).
+	Runner string `yaml:"runner"`
+	// Image replaces the built-in image (docker runner only).
+	Image string `yaml:"image"`
+}
+
+// CloudflarePages deploys the html output with wrangler.
+type CloudflarePages struct {
+	Project string `yaml:"project"`
+	Branch  string `yaml:"branch"`
+	// AccountID and APIToken accept "op://vault/item/field" (1Password),
+	// "env:NAME", or (AccountID only) a literal value.
+	AccountID string `yaml:"account_id"`
+	APIToken  string `yaml:"api_token"`
+}
+
+type Deploy struct {
+	CloudflarePages *CloudflarePages `yaml:"cloudflare_pages"`
+}
+
 type Config struct {
 	Vault    string   `yaml:"vault"`
 	Root     string   `yaml:"root"`
@@ -52,7 +75,9 @@ type Config struct {
 	// ExportFrontmatter copies each note's frontmatter under an "obsidian"
 	// key in hugo/jekyll exports. Off by default: properties often hold data
 	// that is not meant to be published.
-	ExportFrontmatter bool `yaml:"export_frontmatter"`
+	ExportFrontmatter bool   `yaml:"export_frontmatter"`
+	Tools             Tools  `yaml:"tools"`
+	Deploy            Deploy `yaml:"deploy"`
 
 	Strict bool `yaml:"-"`
 }
@@ -103,6 +128,20 @@ func (c *Config) ApplyDefaults() {
 	if c.DataviewScope == "" {
 		c.DataviewScope = "published"
 	}
+	if c.Tools.Runner == "" {
+		c.Tools.Runner = "docker"
+	}
+	if cf := c.Deploy.CloudflarePages; cf != nil {
+		if cf.Branch == "" {
+			cf.Branch = "main"
+		}
+		if cf.AccountID == "" {
+			cf.AccountID = "env:CLOUDFLARE_ACCOUNT_ID"
+		}
+		if cf.APIToken == "" {
+			cf.APIToken = "env:CLOUDFLARE_API_TOKEN"
+		}
+	}
 	c.Root = strings.Trim(c.Root, "/")
 	if c.Hugo.Section == "" {
 		c.Hugo.Section = simpleSlug(path.Base(c.Root))
@@ -146,6 +185,22 @@ func (c *Config) Validate() error {
 	case "published", "vault", "":
 	default:
 		errs = append(errs, fmt.Errorf("dataview_scope %q must be published or vault", c.DataviewScope))
+	}
+	switch c.Tools.Runner {
+	case "docker", "host", "":
+	default:
+		errs = append(errs, fmt.Errorf("tools.runner %q must be docker or host", c.Tools.Runner))
+	}
+	if cf := c.Deploy.CloudflarePages; cf != nil {
+		if cf.Project == "" {
+			errs = append(errs, errors.New("deploy.cloudflare_pages.project is required"))
+		}
+		if !strings.HasPrefix(cf.APIToken, "op://") && !strings.HasPrefix(cf.APIToken, "env:") {
+			errs = append(errs, errors.New(`deploy.cloudflare_pages.api_token must be an "op://" or "env:" reference, not the token itself`))
+		}
+		if c.Target != "html" {
+			errs = append(errs, errors.New("deploy.cloudflare_pages needs the html target"))
+		}
 	}
 	for _, g := range c.Exclude {
 		if !doublestar.ValidatePattern(g) {

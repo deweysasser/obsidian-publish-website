@@ -1,11 +1,15 @@
 package program
 
 import (
+	"context"
+	"errors"
 	"path/filepath"
 
 	"fmt"
 	"github.com/deweysasser/obsidian-publish-website/internal/build"
 	"github.com/deweysasser/obsidian-publish-website/internal/config"
+	"github.com/deweysasser/obsidian-publish-website/internal/deploy"
+	"github.com/deweysasser/obsidian-publish-website/internal/tools"
 	"io"
 	"os"
 	"runtime"
@@ -27,7 +31,20 @@ type Options struct {
 	OutputFormat string `group:"Info" enum:"auto,jsonl,terminal" default:"auto" help:"How to show program output (auto|terminal|jsonl)"`
 	Quiet        bool   `group:"Info" help:"Be less verbose than usual"`
 
-	Build BuildCmd `cmd:"" default:"withargs" help:"Build the site from a publish.yaml config"`
+	Build   BuildCmd   `cmd:"" default:"withargs" help:"Build the site from a publish.yaml config"`
+	Deploy  DeployCmd  `cmd:"" help:"Deploy the already-built site as configured under deploy:"`
+	Publish PublishCmd `cmd:"" help:"Build the site, then deploy it"`
+}
+
+// DeployCmd deploys the output directory of a previous build.
+type DeployCmd struct {
+	Config string `short:"c" default:"publish.yaml" help:"Path to the publish config file"`
+	Output string `short:"o" help:"Override the config's output directory"`
+}
+
+// PublishCmd builds and then deploys.
+type PublishCmd struct {
+	BuildCmd
 }
 
 // BuildCmd builds a site from a configuration file.
@@ -55,20 +72,72 @@ func (program *Options) Parse(args []string) (*kong.Context, error) {
 
 // Run executes the build command.
 func (cmd *BuildCmd) Run(logger zerolog.Logger) error {
-	cfg, err := config.Load(cmd.Config)
+	cfg, err := cmd.load()
 	if err != nil {
 		return err
+	}
+	_, err = build.Run(cfg, logger)
+	return err
+}
+
+func (cmd *BuildCmd) load() (*config.Config, error) {
+	cfg, err := loadConfig(cmd.Config, cmd.Output)
+	if err != nil {
+		return nil, err
 	}
 	if cmd.Target != "" {
 		cfg.Target = cmd.Target
 	}
-	if cmd.Output != "" {
-		if cfg.Output, err = filepath.Abs(cmd.Output); err != nil {
-			return err
+	cfg.Strict = cmd.Strict
+	return cfg, nil
+}
+
+func loadConfig(file, output string) (*config.Config, error) {
+	cfg, err := config.Load(file)
+	if err != nil {
+		return nil, err
+	}
+	if output != "" {
+		if cfg.Output, err = filepath.Abs(output); err != nil {
+			return nil, err
 		}
 	}
-	cfg.Strict = cmd.Strict
-	_, err = build.Run(cfg, logger)
+	return cfg, nil
+}
+
+// Run deploys a built site.
+func (cmd *DeployCmd) Run(logger zerolog.Logger) error {
+	cfg, err := loadConfig(cmd.Config, cmd.Output)
+	if err != nil {
+		return err
+	}
+	return runDeploy(cfg, logger)
+}
+
+// Run builds, then deploys.
+func (cmd *PublishCmd) Run(logger zerolog.Logger) error {
+	cfg, err := cmd.load()
+	if err != nil {
+		return err
+	}
+	if cfg.Deploy.CloudflarePages == nil {
+		return errors.New("publish needs a deploy section in the config (deploy.cloudflare_pages); use build to only build")
+	}
+	if _, err := build.Run(cfg, logger); err != nil {
+		return err
+	}
+	return runDeploy(cfg, logger)
+}
+
+func runDeploy(cfg *config.Config, logger zerolog.Logger) error {
+	r := tools.New(cfg.Tools.Runner, cfg.Tools.Image)
+	if err := r.Check("wrangler"); err != nil {
+		return err
+	}
+	url, err := deploy.Run(context.Background(), cfg, r, logger)
+	if err == nil && url != "" {
+		fmt.Println(url)
+	}
 	return err
 }
 

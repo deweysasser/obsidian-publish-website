@@ -1,29 +1,29 @@
 package search
 
 import (
+	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
+	"github.com/deweysasser/obsidian-publish-website/internal/tools"
 	"github.com/rs/zerolog"
 )
 
-func TestFindPagefindMissing(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
-	if _, err := FindPagefind(); err == nil || !strings.Contains(err.Error(), "search: none") {
-		t.Errorf("err %v", err)
-	}
-}
-
+// TestRunPagefind runs the real pagefind through the configured runner when
+// OBSIDIAN_PUBLISH_TOOLS_RUNNER is set (docker or host); it is skipped otherwise.
 func TestRunPagefind(t *testing.T) {
-	bin, err := FindPagefind()
-	if err != nil {
+	mode := os.Getenv("OBSIDIAN_PUBLISH_TOOLS_RUNNER")
+	if mode == "" {
+		t.Skip("set OBSIDIAN_PUBLISH_TOOLS_RUNNER=docker|host to run pagefind")
+	}
+	r := tools.New(mode, "")
+	if err := r.Check("pagefind"); err != nil {
 		t.Skip(err)
 	}
 	site := t.TempDir()
 	os.WriteFile(filepath.Join(site, "index.html"), []byte(`<html><body><main data-pagefind-body><h1>Hello</h1><p>Main road</p></main></body></html>`), 0o644)
-	if err := RunPagefind(bin, site, zerolog.Nop()); err != nil {
+	if err := RunPagefind(context.Background(), r, site, zerolog.Nop()); err != nil {
 		t.Fatal(err)
 	}
 	for _, f := range []string{"pagefind/pagefind.js", "pagefind/pagefind-ui.js", "pagefind/pagefind-entry.json"} {

@@ -2,33 +2,15 @@
 package search
 
 import (
-	"bytes"
-	"errors"
-	"fmt"
-	"os/exec"
-	"strings"
+	"context"
 
+	"github.com/deweysasser/obsidian-publish-website/internal/tools"
 	"github.com/rs/zerolog"
 )
 
-// FindPagefind locates the pagefind binary on PATH.
-func FindPagefind() (string, error) {
-	for _, name := range []string{"pagefind", "pagefind_extended"} {
-		if p, err := exec.LookPath(name); err == nil {
-			return p, nil
-		}
-	}
-	return "", errors.New(`pagefind not found on PATH; install it with "npm i -g pagefind" or from https://pagefind.app, or set "search: none"`)
-}
-
 // RunPagefind indexes siteDir in place (writes siteDir/pagefind/).
-func RunPagefind(bin, siteDir string, log zerolog.Logger) error {
-	cmd := exec.Command(bin, "--site", siteDir)
-	var out bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &out
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("pagefind failed: %v\n%s", err, strings.TrimSpace(out.String()))
-	}
-	log.Debug().Str("output", out.String()).Msg("pagefind")
-	return nil
+func RunPagefind(ctx context.Context, r tools.Runner, siteDir string, log zerolog.Logger) error {
+	out, err := r.Run(ctx, tools.Spec{Tool: "pagefind", Args: []string{"--site", tools.SitePlaceholder}, Site: siteDir})
+	log.Debug().Str("output", out).Msg("pagefind")
+	return err
 }

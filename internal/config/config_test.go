@@ -109,3 +109,33 @@ func TestValidateSectionAndCollection(t *testing.T) {
 		}
 	}
 }
+
+func TestToolsAndDeployDefaults(t *testing.T) {
+	c, err := Load(writeConfig(t, "vault: /v\nroot: R\ndeploy:\n  cloudflare_pages:\n    project: p\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cf := c.Deploy.CloudflarePages
+	if c.Tools.Runner != "docker" || cf == nil || cf.Branch != "main" || cf.APIToken != "env:CLOUDFLARE_API_TOKEN" || cf.AccountID != "env:CLOUDFLARE_ACCOUNT_ID" {
+		t.Errorf("tools %+v deploy %+v", c.Tools, cf)
+	}
+	c, _ = Load(writeConfig(t, "vault: /v\nroot: R\n"))
+	if c.Deploy.CloudflarePages != nil {
+		t.Error("no deploy section should mean no deploy")
+	}
+}
+
+func TestValidateToolsAndDeploy(t *testing.T) {
+	for body, want := range map[string]string{
+		"tools: {runner: podman}\n":                                                        "tools.runner",
+		"deploy: {cloudflare_pages: {}}\n":                                                 "deploy.cloudflare_pages.project",
+		"deploy: {cloudflare_pages: {project: p, api_token: abc123}}\n":                    "api_token must be",
+		"target: hugo\ndeploy: {cloudflare_pages: {project: p}}\n":                         "html target",
+		"deploy: {cloudflare_pages: {project: p, account_id: op://V/I/f}}\nsearch: none\n": "",
+	} {
+		_, err := Load(writeConfig(t, "vault: /v\nroot: R\n"+body))
+		if want == "" && err != nil || want != "" && (err == nil || !strings.Contains(err.Error(), want)) {
+			t.Errorf("%q: err %v, want %q", body, err, want)
+		}
+	}
+}

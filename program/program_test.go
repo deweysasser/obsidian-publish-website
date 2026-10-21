@@ -75,3 +75,28 @@ func TestBuildCommandRun(t *testing.T) {
 	cmd = BuildCmd{Config: cfg2, Output: filepath.Join(dir, "out3"), Strict: true}
 	assert.ErrorContains(t, cmd.Run(zerolog.Nop()), "R/a.md:1")
 }
+
+func TestParsePublishAndDeployCommands(t *testing.T) {
+	var p Options
+	ctx, err := p.Parse([]string{"publish", "-c", "x.yaml", "-o", "out", "--strict"})
+	assert.NoError(t, err)
+	assert.Equal(t, "publish", ctx.Command())
+	assert.Equal(t, "x.yaml", p.Publish.Config)
+	assert.True(t, p.Publish.Strict)
+	var d Options
+	ctx, err = d.Parse([]string{"deploy", "-c", "y.yaml"})
+	assert.NoError(t, err)
+	assert.Equal(t, "deploy", ctx.Command())
+	assert.Equal(t, "y.yaml", d.Deploy.Config)
+}
+
+func TestPublishWithoutDeployConfigFailsBeforeBuilding(t *testing.T) {
+	dir := t.TempDir()
+	vault, _ := filepath.Abs("../testdata/fixture-vault")
+	cfg := filepath.Join(dir, "publish.yaml")
+	os.WriteFile(cfg, []byte("vault: "+vault+"\nroot: Town\noutput: out\nsearch: none\ndataview: none\n"), 0o644)
+	err := (&PublishCmd{BuildCmd: BuildCmd{Config: cfg}}).Run(zerolog.Nop())
+	assert.ErrorContains(t, err, "deploy")
+	_, statErr := os.Stat(filepath.Join(dir, "out"))
+	assert.True(t, os.IsNotExist(statErr), "nothing should be built")
+}
