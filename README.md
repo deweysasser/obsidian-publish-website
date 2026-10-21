@@ -43,8 +43,8 @@ they are empty or were created by this tool (they contain a
 ### publish.yaml
 
 ```yaml
-vault: ~/Documents/MyVault   # vault root (relative paths are relative to this file)
-root: Town Notes           # folder inside the vault to publish
+vault: ~/Documents/MyVault             # vault root (relative paths are relative to this file)
+root: Town Notes                       # folder inside the vault to publish
 exclude:                               # globs relative to root; a matching folder excludes everything in it
   - People/**
 target: html                           # html | hugo | jekyll
@@ -54,13 +54,13 @@ dataview: node                         # node | none (none renders queries as pl
 site:
   title: Town Notes
   base_url: https://example.github.io/town/   # absolute URL; its path prefixes every link
-  home: Town Notes.md      # optional, relative to root; default: root folder note
+  home: Town Notes.md                  # optional, relative to root; default: root folder note
 html:
   template_dir: ./templates            # optional: override layout.html
 hugo:
-  section: town                    # content/<section>/  (default: slug of root)
+  section: town                        # content/<section>/  (default: slug of root)
 jekyll:
-  collection: town                 # _<collection>/      (default: slug of root)
+  collection: town                     # _<collection>/      (default: slug of root)
 export_frontmatter: false              # hugo/jekyll: copy note frontmatter under "obsidian:"
 transforms: []                         # post-render hooks (e.g. future redaction)
 ```
