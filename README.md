@@ -51,10 +51,14 @@ target: html                           # html | hugo | jekyll
 output: ./site
 search: pagefind                       # pagefind | none (html target only)
 dataview: node                         # node | none (none renders queries as placeholders)
+dataview_settings:                     # optional: override the vault's Dataview settings for the site
+  defaultDateFormat: "MMM d, yyyy"
 site:
   title: Town Notes
   base_url: https://example.github.io/town/   # absolute URL; its path prefixes every link
   home: Town Notes.md                  # optional, relative to root; default: root folder note
+  favicon: Attachments/icon.png        # optional, relative to the vault; default: a generic icon
+  hidden_tags: [MOCs]                  # optional: organizing tags to leave off the site (and nested ones)
 html:
   template_dir: ./templates            # optional: override layout.html
 hugo:
@@ -76,7 +80,16 @@ become the folder's page.
 
 A self-contained site. Push the output directory to GitHub Pages (it includes
 `.nojekyll`) or any static host. Set `site.base_url` to the final URL so
-links, the sitemap and search work under a sub-path.
+links, the sitemap, `robots.txt`, canonical URLs and search work under a
+sub-path.
+
+Each page's sidebar lists the top-level entries plus the contents of the
+folders on the path to that page, so page size does not grow with the
+site. Pages carry a meta description (`description` or `summary`
+frontmatter, else the first substantial paragraph), a canonical URL and
+Open Graph tags for link previews. Wide tables turn into labelled cards on
+phones. A `_headers` file lets Cloudflare Pages (or Netlify) cache the
+content-hashed CSS/JS and Pagefind's index for a year.
 
 ### hugo
 
@@ -128,14 +141,26 @@ A fenced `transcript` block renders as a collapsible timeline:
 Lines may start with `m:ss`, `h:mm:ss` or `[m:ss]`, optionally followed by
 `|` or `-`. Text is literal (no links or formatting), as Obsidian shows it.
 If the note's `video` or `url` frontmatter is a YouTube URL, timestamps link
-to that moment. To make the block readable in Obsidian too, add a CSS
-snippet:
+to that moment; on the html site they seek an embedded player instead (see
+below). To make the block readable in Obsidian too, add a CSS snippet:
 
 ```css
 .block-language-transcript, pre.language-transcript, pre.language-transcript code {
   white-space: pre-wrap; font-family: var(--font-text);
 }
 ```
+
+### YouTube embeds
+
+`![caption](https://www.youtube.com/watch?v=...)` (Obsidian's video embed)
+renders as a thumbnail that loads a `youtube-nocookie.com` player when
+clicked; nothing else is fetched from YouTube until then. Transcript
+timestamps seek that player, or open a docked one if the page has no embed.
+Some channels forbid embedding: the build asks YouTube's oEmbed endpoint
+about each video (answers cached for 30 days in the user cache directory,
+`obsidian-publish/youtube-embeddable.json`), and refused videos keep plain
+links to YouTube. Network failures count as embeddable; the page script
+then falls back to a link if the player refuses.
 
 ## Dataview
 
