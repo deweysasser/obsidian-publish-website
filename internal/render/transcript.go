@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/deweysasser/obsidian-publish-website/internal/youtube"
 )
 
 // transcriptLineRe matches "0:07 | text", "1:02:03 text" and "[2:05] text".
@@ -16,8 +18,13 @@ var transcriptLineRe = regexp.MustCompile(`^\[?((?:\d+:)?\d{1,2}:\d{2})\]?\s*(?:
 // note's video when its "video" or "url" frontmatter is a YouTube URL.
 func (r *Renderer) transcriptBlock(code string, _ int, ctx Context) (string, error) {
 	video := r.videoURL(ctx.Path)
+	id := youtube.ID(video)
 	var b strings.Builder
-	b.WriteString("<details class=\"transcript\">\n<summary>Transcript</summary>\n<div class=\"transcript-lines\">\n")
+	b.WriteString("<details class=\"transcript\"")
+	if id != "" && !r.embeddable(id) {
+		b.WriteString(" data-noembed") // timestamps open YouTube rather than a player
+	}
+	b.WriteString(">\n<summary>Transcript</summary>\n<div class=\"transcript-lines\">\n")
 	for _, line := range strings.Split(code, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -27,14 +34,17 @@ func (r *Renderer) transcriptBlock(code string, _ int, ctx Context) (string, err
 		if m := transcriptLineRe.FindStringSubmatch(line); m != nil {
 			stamp, text = m[1], m[2]
 		}
-		b.WriteString(`<p class="tl">`)
+		// Markup is deliberately terse: a long meeting has thousands of lines.
+		b.WriteString("<p>")
 		switch {
+		case stamp != "" && id != "":
+			b.WriteString(`<a href="https://youtu.be/` + id + "?t=" + strconv.Itoa(seconds(stamp)) + `">` + stamp + `</a>`)
 		case stamp != "" && video != nil:
-			b.WriteString(`<a class="ts" href="` + html.EscapeString(withTime(video, seconds(stamp))) + `">` + stamp + `</a>`)
+			b.WriteString(`<a href="` + html.EscapeString(withTime(video, seconds(stamp))) + `">` + stamp + `</a>`)
 		default:
-			b.WriteString(`<span class="ts">` + stamp + `</span>`)
+			b.WriteString(`<span>` + stamp + `</span>`)
 		}
-		b.WriteString(`<span class="tx">` + html.EscapeString(text) + "</span></p>\n")
+		b.WriteString(html.EscapeString(text) + "</p>\n")
 	}
 	b.WriteString("</div>\n</details>\n")
 	return "\n" + b.String(), nil

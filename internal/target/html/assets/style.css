@@ -131,6 +131,21 @@ details.transcript { border: 1px solid var(--border); border-radius: 6px; margin
 details.transcript > summary { cursor: pointer; padding: .5rem .8rem; font-weight: 600; background: var(--bg-alt); border-radius: 6px; }
 details.transcript[open] > summary { border-bottom: 1px solid var(--border); border-radius: 6px 6px 0 0; }
 .transcript-lines { padding: .4rem .8rem; }
-.transcript-lines .tl { display: grid; grid-template-columns: 4.5em 1fr; gap: .75em; margin: 0; padding: .15rem 0; line-height: 1.5; }
-.transcript-lines .ts { font-variant-numeric: tabular-nums; color: var(--muted); text-align: right; font-size: .9em; padding-top: .1em; }
-.transcript-lines a.ts:hover { color: var(--link); }
+.transcript-lines p { display: grid; grid-template-columns: 4.5em 1fr; gap: .75em; margin: 0; padding: .15rem 0; line-height: 1.5; }
+.transcript-lines p > :first-child { font-variant-numeric: tabular-nums; color: var(--muted); text-align: right; font-size: .9em; padding-top: .1em; }
+.transcript-lines p > a:first-child:hover { color: var(--link); }
+.transcript-lines p.playing { background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 4px; }
+
+/* YouTube embeds: a thumbnail until clicked, then the player */
+.yt { display: block; position: relative; max-width: 40rem; aspect-ratio: 16 / 9; margin: 1rem 0; background: #000; border-radius: 8px; overflow: hidden; }
+.yt > a, .yt img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.yt-play { position: absolute; left: 50%; top: 50%; width: 68px; height: 48px; margin: -24px 0 0 -34px; background: #f00; border-radius: 12px; opacity: .9; }
+.yt-play::after { content: ""; position: absolute; left: 27px; top: 14px; border-style: solid; border-width: 10px 0 10px 17px; border-color: transparent transparent transparent #fff; }
+.yt a:hover .yt-play { opacity: 1; }
+.yt .yt-refused { display: flex; align-items: center; justify-content: center; height: 100%; padding: 1rem; color: #fff; text-align: center; }
+.yt-frame { width: 100%; height: 100%; }
+.yt-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+.yt-frame.docked { position: fixed; right: 1rem; bottom: 1rem; width: min(24rem, 60vw); height: auto; aspect-ratio: 16 / 9; z-index: 30; box-shadow: 0 .5rem 2rem rgba(0,0,0,.35); border-radius: 8px; background: #000; }
+.yt:has(.yt-frame.docked) { overflow: visible; }
+.yt-close { display: none; position: absolute; top: -.8rem; left: -.8rem; z-index: 1; background: #222; box-shadow: 0 0 0 2px #fff; color: #fff; border: 0; border-radius: 50%; width: 1.6rem; height: 1.6rem; cursor: pointer; line-height: 1; }
+.yt-frame.docked .yt-close { display: block; }

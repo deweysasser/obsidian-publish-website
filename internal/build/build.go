@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/deweysasser/obsidian-publish-website/internal/tools"
 	"github.com/deweysasser/obsidian-publish-website/internal/transform"
 	"github.com/deweysasser/obsidian-publish-website/internal/vault"
+	"github.com/deweysasser/obsidian-publish-website/internal/youtube"
 	"github.com/rs/zerolog"
 )
 
@@ -87,6 +89,9 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 		warn(fmt.Sprintf("%s:%d: %s", p, line, msg))
 	})
 	r.StrictLineBreaks = vault.StrictLineBreaks(cfg.Vault)
+	if cfg.Target == "html" {
+		r.YouTubeEmbeddable = youtubeEmbeds(ix, pub, log)
+	}
 	if err := evaluateDataview(cfg, r, ix, log); err != nil {
 		return nil, err
 	}
@@ -186,6 +191,45 @@ func evaluateDataview(cfg *config.Config, r *render.Renderer, ix *index.Index, l
 	r.SetDataview(res, settings)
 	log.Info().Int("queries", len(reqs)).Stringer("elapsed", time.Since(start).Round(time.Millisecond)).Msg("Evaluated dataview queries")
 	return nil
+}
+
+var mdImageRe = regexp.MustCompile(`!\[[^\]]*\]\(\s*<?([^)\s>]+)`)
+
+// youtubeEmbeds finds the YouTube videos the published notes refer to and asks
+// YouTube which may be embedded (cached; failures count as embeddable).
+func youtubeEmbeds(ix *index.Index, pub *selector.Published, log zerolog.Logger) func(string) bool {
+	var ids []string
+	for p := range pub.Pages {
+		n := ix.Pages[p].Note
+		for _, k := range []string{"video", "url"} {
+			if s, ok := n.Frontmatter[k].(string); ok {
+				if id := youtube.IDOf(s); id != "" {
+					ids = append(ids, id)
+				}
+			}
+		}
+		for _, m := range mdImageRe.FindAllSubmatch(n.Body, -1) {
+			if id := youtube.IDOf(string(m[1])); id != "" {
+				ids = append(ids, id)
+			}
+		}
+	}
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		cacheDir = os.TempDir()
+	}
+	c := youtube.NewChecker(filepath.Join(cacheDir, "obsidian-publish", "youtube-embeddable.json"))
+	if len(ids) > 0 {
+		start := time.Now()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		c.Prefetch(ctx, ids)
+		cancel()
+		if err := c.Save(); err != nil {
+			log.Warn().Err(err).Msg("Could not save YouTube embed cache")
+		}
+		log.Info().Int("videos", len(ids)).Stringer("elapsed", time.Since(start).Round(time.Millisecond)).Msg("Checked YouTube embedding")
+	}
+	return c.Embeddable
 }
 
 func newTarget(cfg *config.Config, warn func(string), log zerolog.Logger) (target.Target, error) {

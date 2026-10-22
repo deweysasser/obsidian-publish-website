@@ -23,27 +23,34 @@ type TOCEntry struct {
 	ID    string
 }
 
-// mdObsidian keeps single newlines as line breaks (Obsidian's default);
-// mdStrict follows CommonMark ("Strict line breaks" on in Obsidian).
-var mdObsidian, mdStrict = newMarkdown(ghtml.WithHardWraps()), newMarkdown()
+// markdown returns the renderer's goldmark instance. By default single
+// newlines stay line breaks (Obsidian's default); StrictLineBreaks follows
+// CommonMark ("Strict line breaks" on in Obsidian).
+func (r *Renderer) markdown() goldmark.Markdown {
+	if r.md == nil || r.mdStrict != r.StrictLineBreaks {
+		var opts []renderer.Option
+		if !r.StrictLineBreaks {
+			opts = append(opts, ghtml.WithHardWraps())
+		}
+		r.md, r.mdStrict = newMarkdown(imageRenderer{r}, opts...), r.StrictLineBreaks
+	}
+	return r.md
+}
 
-func newMarkdown(opts ...renderer.Option) goldmark.Markdown {
+func newMarkdown(images imageRenderer, opts ...renderer.Option) goldmark.Markdown {
 	return goldmark.New(
 		goldmark.WithExtensions(extension.GFM, extension.Footnote),
 		goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(headingIDTransformer{}, 100))),
 		goldmark.WithRendererOptions(append(opts,
 			ghtml.WithUnsafe(),
-			renderer.WithNodeRenderers(util.Prioritized(&codeRenderer{}, 100)),
+			renderer.WithNodeRenderers(util.Prioritized(&codeRenderer{}, 100), util.Prioritized(images, 100)),
 		)...),
 	)
 }
 
 // MarkdownToHTML renders preprocessed markdown and returns the HTML and TOC.
 func (r *Renderer) MarkdownToHTML(src string) (string, []TOCEntry, error) {
-	md := mdObsidian
-	if r.StrictLineBreaks {
-		md = mdStrict
-	}
+	md := r.markdown()
 	source := []byte(src)
 	doc := md.Parser().Parse(text.NewReader(source))
 	var toc []TOCEntry

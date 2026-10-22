@@ -3,6 +3,8 @@
 package render
 
 import (
+	"github.com/yuin/goldmark"
+
 	"github.com/deweysasser/obsidian-publish-website/internal/index"
 	"github.com/deweysasser/obsidian-publish-website/internal/resolve"
 	"github.com/deweysasser/obsidian-publish-website/internal/selector"
@@ -42,11 +44,16 @@ type Renderer struct {
 	// StrictLineBreaks mirrors Obsidian's setting: when false (the default),
 	// single newlines render as line breaks (html target only).
 	StrictLineBreaks bool
+	// YouTubeEmbeddable reports whether a video's owner allows embedding
+	// (nil: assume yes).
+	YouTubeEmbeddable func(id string) bool
 
 	fenceHooks map[string]FenceHook
 	inlineHook func(code string, line int, ctx Context) (string, bool)
 	embedHook  func(l index.Link, line int, ctx Context) string
 	dv         dvState
+	md         goldmark.Markdown
+	mdStrict   bool
 }
 
 // NewRenderer builds a renderer. warn receives every non-fatal problem.
