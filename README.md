@@ -150,6 +150,25 @@ below). To make the block readable in Obsidian too, add a CSS snippet:
 }
 ```
 
+### U.S. map
+
+A fenced `usmap` block draws a map of the 50 states, DC and the five
+territories (Alaska, Hawaii and the territories as insets; small Northeast
+states also get labelled squares):
+
+````markdown
+```usmap
+US
+```
+````
+
+The argument is a published folder, relative to the note's folder or the
+published root (empty: the note's own folder). Each state or territory with
+a published subfolder or note there, named like `Massachusetts`,
+`U.S. Virgin Islands` or `MA`, becomes a link; the rest are greyed out.
+The shapes are embedded in the binary (Census Bureau cartographic
+boundaries, public domain); `tools/usmap/build.sh` regenerates them.
+
 ### YouTube embeds
 
 `![caption](https://www.youtube.com/watch?v=...)` (Obsidian's video embed)

@@ -158,3 +158,15 @@ details.transcript[open] > summary { border-bottom: 1px solid var(--border); bor
 .yt:has(.yt-frame.docked) { overflow: visible; }
 .yt-close { display: none; position: absolute; top: -.8rem; left: -.8rem; z-index: 1; background: #222; box-shadow: 0 0 0 2px #fff; color: #fff; border: 0; border-radius: 50%; width: 1.6rem; height: 1.6rem; cursor: pointer; line-height: 1; }
 .yt-frame.docked .yt-close { display: block; }
+
+/* usmap block: states with a page are links */
+.usmap { margin: 1.5rem 0; }
+.usmap svg { display: block; width: 100%; height: auto; }
+.usmap path { fill: var(--border); stroke: var(--bg); stroke-width: .75; stroke-linejoin: round; }
+.usmap a path, .usmap a .sq { fill: var(--accent); }
+.usmap a:hover path, .usmap a:hover .sq, .usmap a:focus-visible path, .usmap a:focus-visible .sq { fill: color-mix(in srgb, var(--accent) 65%, var(--fg)); }
+.usmap .sq { fill: var(--border); }
+.usmap .inset { fill: transparent; stroke: var(--border); }
+.usmap text { font-size: 11px; text-anchor: middle; dominant-baseline: central; fill: var(--muted); pointer-events: none; }
+.usmap a text { fill: var(--fg); }
+.usmap a .sq + text { fill: var(--bg); font-weight: 600; }
