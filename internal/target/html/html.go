@@ -88,6 +88,7 @@ type view struct {
 	// page metadata for search engines and link previews
 	Description, Canonical, Image, Favicon string
 	Style, Script                          string
+	HasTags                                bool
 	Content                                template.HTML
 	Nav                                    template.HTML
 	TOC                                    []render.TOCEntry
@@ -104,6 +105,7 @@ func (t *Target) write(s *target.Site, slug string, v view, current string) erro
 	if t.origin != "" && current != "" {
 		v.Canonical = t.origin + current
 	}
+	v.HasTags = len(s.Tags) > 0
 	v.Style, v.Script = t.base+t.versioned["style.css"], t.base+t.versioned["app.js"]
 	v.Favicon = t.base + "assets/favicon.svg"
 	if f := s.Config.Site.Favicon; f != "" {
@@ -242,6 +244,9 @@ func (t *Target) writeTags(s *target.Site) error {
 	var names []string
 	for tg := range s.Tags {
 		names = append(names, tg)
+	}
+	if len(names) == 0 {
+		return nil
 	}
 	sort.Slice(names, func(i, j int) bool { return strings.ToLower(names[i]) < strings.ToLower(names[j]) })
 	var b strings.Builder

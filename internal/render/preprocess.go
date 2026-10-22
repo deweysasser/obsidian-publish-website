@@ -165,6 +165,9 @@ func (r *Renderer) rewriteProse(s string, line int, ctx Context, last bool) stri
 		if len(tags) != 1 {
 			return m
 		}
+		if r.HiddenTag != nil && r.HiddenTag(tags[0]) {
+			return lead
+		}
 		if u := r.URLs.TagURL(tags[0]); u != "" {
 			return lead + hold(fmt.Sprintf(`<a class="tag" href="%s">%s</a>`, html.EscapeString(u), html.EscapeString(tags[0])))
 		}

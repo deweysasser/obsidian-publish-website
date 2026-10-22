@@ -200,3 +200,24 @@ func TestDataviewSettingsOverrideVault(t *testing.T) {
 		t.Errorf("date format override not applied:\n%s", ci)
 	}
 }
+
+func TestHiddenTags(t *testing.T) {
+	out := t.TempDir()
+	cfg := fixtureConfig(out, "html")
+	cfg.Site.HiddenTags = []string{"Civic"} // case-insensitive, no '#', hides nested tags too
+	if _, err := Run(cfg, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	for _, gone := range []string{"tags/civic", "tags/civic-roads", "tags/index.html"} {
+		if _, err := os.Stat(filepath.Join(out, gone)); err == nil {
+			t.Errorf("%s still written", gone)
+		}
+	}
+	rr := read(t, filepath.Join(out, "issues/road-repair/index.html"))
+	if strings.Contains(rr, `class="tag"`) || strings.Contains(rr, `/tags/`) {
+		t.Error("hidden tag still shown on page or Tags link present with no tags")
+	}
+	if home := read(t, filepath.Join(out, "index.html")); strings.Contains(home, "#civic") {
+		t.Error("inline hidden tag still rendered")
+	}
+}

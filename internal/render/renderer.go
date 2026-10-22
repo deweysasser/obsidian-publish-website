@@ -47,6 +47,8 @@ type Renderer struct {
 	// YouTubeEmbeddable reports whether a video's owner allows embedding
 	// (nil: assume yes).
 	YouTubeEmbeddable func(id string) bool
+	// HiddenTag reports tags to leave out of rendered text (nil: none).
+	HiddenTag func(tag string) bool
 
 	fenceHooks map[string]FenceHook
 	inlineHook func(code string, line int, ctx Context) (string, bool)

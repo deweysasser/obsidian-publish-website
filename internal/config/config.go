@@ -21,6 +21,21 @@ type Site struct {
 	// Favicon is an image in the vault (path relative to the vault root);
 	// a generic icon is used when empty.
 	Favicon string `yaml:"favicon"`
+	// HiddenTags are organizing tags left off the site (case-insensitive,
+	// '#' optional; hiding "a" also hides "a/b").
+	HiddenTags []string `yaml:"hidden_tags"`
+}
+
+// TagHidden reports whether tag (with or without '#') is in HiddenTags.
+func (s Site) TagHidden(tag string) bool {
+	t := strings.ToLower(strings.TrimPrefix(tag, "#"))
+	for _, h := range s.HiddenTags {
+		h = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(h), "#"))
+		if h != "" && (t == h || strings.HasPrefix(t, h+"/")) {
+			return true
+		}
+	}
+	return false
 }
 
 type Hugo struct {

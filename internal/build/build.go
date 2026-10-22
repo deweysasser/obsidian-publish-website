@@ -89,6 +89,7 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 		warn(fmt.Sprintf("%s:%d: %s", p, line, msg))
 	})
 	r.StrictLineBreaks = vault.StrictLineBreaks(cfg.Vault)
+	r.HiddenTag = cfg.Site.TagHidden
 	if cfg.Target == "html" {
 		r.YouTubeEmbeddable = youtubeEmbeds(ix, pub, log)
 	}
@@ -113,6 +114,13 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 			return nil, err
 		}
 		site.Pages = append(site.Pages, page)
+		shown := page.Tags[:0:0]
+		for _, tg := range page.Tags {
+			if !cfg.Site.TagHidden(tg) {
+				shown = append(shown, tg)
+			}
+		}
+		page.Tags = shown
 		for _, tg := range page.Tags {
 			k := strings.ToLower(tg) // #Project and #project share one tag page
 			site.Tags[k] = append(site.Tags[k], page)

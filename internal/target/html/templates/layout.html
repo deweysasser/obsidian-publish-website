@@ -43,9 +43,11 @@
 <div class="layout">
   <nav id="site-nav" class="site-nav" data-pagefind-ignore="all">
     {{.Nav}}
+    {{- if .HasTags}}
     <ul class="nav-extra">
       <li><a href="{{.Base}}tags/">Tags</a></li>
     </ul>
+    {{- end}}
   </nav>
   <main class="content">
     {{- if .Crumbs}}
