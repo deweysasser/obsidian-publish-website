@@ -4,6 +4,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -209,5 +210,37 @@ func TestConfiguredFavicon(t *testing.T) {
 	}
 	if idx, _ := os.ReadFile(filepath.Join(out, "a/index.html")); !strings.Contains(string(idx), `<link rel="icon" href="/favicon.png">`) {
 		t.Error("favicon link missing")
+	}
+}
+
+func TestFingerprintedAssetsAndHeaders(t *testing.T) {
+	out := t.TempDir()
+	cfg := &config.Config{Output: out, Search: "none", Site: config.Site{Title: "S"}}
+	tg, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tg.Finalize(&target.Site{Config: cfg, Tree: navTree(), Tags: map[string][]*render.Page{}}); err != nil {
+		t.Fatal(err)
+	}
+	page, _ := os.ReadFile(filepath.Join(out, "a/index.html"))
+	for _, name := range []string{"style.css", "app.js"} {
+		ext := path.Ext(name)
+		re := regexp.MustCompile(`/assets/_v/` + strings.TrimSuffix(name, ext) + `\.[0-9a-f]{10}\` + ext)
+		ref := re.FindString(string(page))
+		if ref == "" {
+			t.Fatalf("page does not reference fingerprinted %s", name)
+		}
+		got, _ := os.ReadFile(filepath.Join(out, ref))
+		want, _ := assetFS.ReadFile("assets/" + name)
+		if len(want) == 0 || string(got) != string(want) {
+			t.Errorf("%s: fingerprinted copy missing or different", ref)
+		}
+	}
+	headers, _ := os.ReadFile(filepath.Join(out, "_headers"))
+	for _, want := range []string{"/assets/_v/*\n  Cache-Control: public, max-age=31536000, immutable", "/pagefind/fragment/*\n", "/pagefind/index/*\n"} {
+		if !strings.Contains(string(headers), want) {
+			t.Errorf("_headers lacks %q:\n%s", want, headers)
+		}
 	}
 }

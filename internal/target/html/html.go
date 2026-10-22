@@ -3,7 +3,9 @@ package html
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/xml"
 	"fmt"
 	"html/template"
@@ -37,6 +39,9 @@ type Target struct {
 	out    string
 	origin string // scheme://host of base_url, "" when it is not absolute
 	nav    *nav
+	// versioned maps a static asset to its content-addressed copy, which
+	// browsers may cache forever.
+	versioned map[string]string
 	// Warn receives non-fatal problems.
 	Warn func(string)
 }
@@ -58,6 +63,16 @@ func New(cfg *config.Config) (*Target, error) {
 		}
 	}
 	t.tmpl = tmpl
+	t.versioned = map[string]string{}
+	for _, name := range []string{"style.css", "app.js"} {
+		b, err := assetFS.ReadFile("assets/" + name)
+		if err != nil {
+			return nil, err
+		}
+		sum := sha256.Sum256(b)
+		ext := path.Ext(name)
+		t.versioned[name] = "assets/_v/" + strings.TrimSuffix(name, ext) + "." + hex.EncodeToString(sum[:5]) + ext
+	}
 	return t, nil
 }
 
@@ -72,6 +87,7 @@ type view struct {
 	SiteTitle, Base, Title string
 	// page metadata for search engines and link previews
 	Description, Canonical, Image, Favicon string
+	Style, Script                          string
 	Content                                template.HTML
 	Nav                                    template.HTML
 	TOC                                    []render.TOCEntry
@@ -88,6 +104,7 @@ func (t *Target) write(s *target.Site, slug string, v view, current string) erro
 	if t.origin != "" && current != "" {
 		v.Canonical = t.origin + current
 	}
+	v.Style, v.Script = t.base+t.versioned["style.css"], t.base+t.versioned["app.js"]
 	v.Favicon = t.base + "assets/favicon.svg"
 	if f := s.Config.Site.Favicon; f != "" {
 		v.Favicon = t.base + faviconName(f)
@@ -186,12 +203,32 @@ func (t *Target) Finalize(s *target.Site) error {
 		if err != nil {
 			return err
 		}
-		return target.WriteFile(t.out, p, b)
+		if v := t.versioned[strings.TrimPrefix(p, "assets/")]; v != "" {
+			if err := target.WriteFile(t.out, v, b); err != nil {
+				return err
+			}
+		}
+		return target.WriteFile(t.out, p, b) // unversioned too, for custom templates
 	}); err != nil {
+		return err
+	}
+	if err := target.WriteFile(t.out, "_headers", []byte(cacheHeaders)); err != nil {
 		return err
 	}
 	return t.writeSitemap(s)
 }
+
+// cacheHeaders tells Cloudflare Pages (and Netlify) which files never change
+// under their name: our content-addressed assets and Pagefind's hashed index.
+const cacheHeaders = `/assets/_v/*
+  Cache-Control: public, max-age=31536000, immutable
+/pagefind/fragment/*
+  Cache-Control: public, max-age=31536000, immutable
+/pagefind/index/*
+  Cache-Control: public, max-age=31536000, immutable
+/assets/vendor/*
+  Cache-Control: public, max-age=86400
+`
 
 // faviconName is where a configured favicon is published.
 func faviconName(src string) string { return "favicon" + strings.ToLower(path.Ext(src)) }

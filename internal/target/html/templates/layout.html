@@ -26,7 +26,7 @@
 <meta name="twitter:card" content="summary">
 {{- end}}
 <link rel="icon" href="{{.Favicon}}">
-<link rel="stylesheet" href="{{.Base}}assets/style.css">
+<link rel="stylesheet" href="{{.Style}}">
 {{- if .Search}}
 <link rel="stylesheet" href="{{.Base}}pagefind/pagefind-ui.css">
 {{- end}}
@@ -79,7 +79,7 @@
   </aside>
   {{- end}}
 </div>
-<script src="{{.Base}}assets/app.js" defer></script>
+<script src="{{.Script}}" defer></script>
 {{- if .Search}}
 <script src="{{.Base}}pagefind/pagefind-ui.js"></script>
 <script>window.addEventListener("DOMContentLoaded",function(){new PagefindUI({element:"#search",showSubResults:true,showImages:false});});</script>
