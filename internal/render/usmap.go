@@ -59,7 +59,7 @@ func (r *Renderer) townDots(m *usmap.Map, targets map[string]child) string {
 			for _, town := range r.children(st.folder) {
 				if lat, lon, ok := r.townLocation(town, reg.Code); ok {
 					x, y := reg.Proj.Point(lon, lat)
-					b.WriteString(`<circle cx="` + num1(x) + `" cy="` + num1(y) + `" r="2"/>`)
+					b.WriteString(`<circle cx="` + num1(x) + `" cy="` + num1(y) + `" r="6"/>`)
 				}
 			}
 			break
