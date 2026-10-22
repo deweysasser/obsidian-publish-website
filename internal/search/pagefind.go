@@ -3,6 +3,7 @@ package search
 
 import (
 	"context"
+	"time"
 
 	"github.com/deweysasser/obsidian-publish-website/internal/tools"
 	"github.com/rs/zerolog"
@@ -10,7 +11,12 @@ import (
 
 // RunPagefind indexes siteDir in place (writes siteDir/pagefind/).
 func RunPagefind(ctx context.Context, r tools.Runner, siteDir string, log zerolog.Logger) error {
+	start := time.Now()
 	out, err := r.Run(ctx, tools.Spec{Tool: "pagefind", Args: []string{"--site", tools.SitePlaceholder}, Site: siteDir})
 	log.Debug().Str("output", out).Msg("pagefind")
-	return err
+	if err != nil {
+		return err
+	}
+	log.Info().Dur("elapsed", time.Since(start)).Msg("Indexed site search")
+	return nil
 }

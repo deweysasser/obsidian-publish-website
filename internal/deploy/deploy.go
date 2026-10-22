@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"time"
 
 	"github.com/deweysasser/obsidian-publish-website/internal/config"
 	"github.com/deweysasser/obsidian-publish-website/internal/secret"
@@ -37,6 +38,7 @@ func Run(ctx context.Context, cfg *config.Config, r tools.Runner, log zerolog.Lo
 		return "", fmt.Errorf("deploy.cloudflare_pages.api_token: %w", err)
 	}
 	log.Info().Str("project", cf.Project).Str("branch", cf.Branch).Msg("Deploying to Cloudflare Pages")
+	start := time.Now()
 	out, err := r.Run(ctx, tools.Spec{
 		Tool: "wrangler",
 		Args: []string{"pages", "deploy", tools.SitePlaceholder, "--project-name", cf.Project, "--branch", cf.Branch, "--commit-dirty=true"},
@@ -49,6 +51,6 @@ func Run(ctx context.Context, cfg *config.Config, r tools.Runner, log zerolog.Lo
 		return "", err
 	}
 	url := deploymentURLRe.FindString(out)
-	log.Info().Str("url", url).Msg("Deployed")
+	log.Info().Str("url", url).Dur("elapsed", time.Since(start)).Msg("Deployed")
 	return url, nil
 }

@@ -1,9 +1,11 @@
 package search
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/deweysasser/obsidian-publish-website/internal/tools"
@@ -30,5 +32,20 @@ func TestRunPagefind(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(site, f)); err != nil {
 			t.Errorf("missing %s", f)
 		}
+	}
+}
+
+type stubRunner struct{}
+
+func (stubRunner) Check(string) error                              { return nil }
+func (stubRunner) Run(context.Context, tools.Spec) (string, error) { return "", nil }
+
+func TestRunPagefindLogsElapsed(t *testing.T) {
+	var buf bytes.Buffer
+	if err := RunPagefind(context.Background(), stubRunner{}, t.TempDir(), zerolog.New(&buf)); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), `"elapsed":`) || !strings.Contains(buf.String(), "Indexed site search") {
+		t.Errorf("log: %s", buf.String())
 	}
 }

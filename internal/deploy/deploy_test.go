@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -79,5 +80,18 @@ func TestSecretAndToolErrors(t *testing.T) {
 	t.Setenv("TEST_CF_TOKEN", "tok")
 	if _, err := Run(context.Background(), cfgFor(site), &fakeRunner{err: errors.New("wrangler failed")}, zerolog.Nop()); err == nil {
 		t.Error("tool failure should be an error")
+	}
+}
+
+func TestLogsElapsed(t *testing.T) {
+	t.Setenv("TEST_CF_TOKEN", "tok")
+	site := builtSite(t)
+	var buf bytes.Buffer
+	r := &fakeRunner{out: "https://abc.proj.pages.dev\n"}
+	if _, err := Run(context.Background(), cfgFor(site), r, zerolog.New(&buf)); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), `"message":"Deployed"`) || !strings.Contains(buf.String(), `"elapsed":`) {
+		t.Errorf("log: %s", buf.String())
 	}
 }
