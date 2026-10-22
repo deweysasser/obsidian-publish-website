@@ -73,7 +73,7 @@ func TestInlineAndUnsupportedAndErrors(t *testing.T) {
 	}
 	h := p.HTML
 	for _, want := range []string{"Status is open.", `<span class="dv-unsupported">`, `<div class="dv-unsupported">`, `<div class="dv-error">`,
-		"No results to show for list query.", `<input type="checkbox" disabled>`, `<input type="checkbox" disabled checked>`, `href="/c/b/"`} {
+		`<div class="dv-empty">Nothing right now.</div>`, `<input type="checkbox" disabled>`, `<input type="checkbox" disabled checked>`, `href="/c/b/"`} {
 		if !strings.Contains(h, want) {
 			t.Errorf("missing %q in\n%s", want, h)
 		}

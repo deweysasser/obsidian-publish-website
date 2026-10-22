@@ -10,6 +10,23 @@
   var cur = nav && nav.querySelector("a[aria-current=page]");
   if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest" });
 
+  // Wide tables become labelled cards on narrow screens (see .stack in CSS).
+  document.querySelectorAll(".content table").forEach(function (t) {
+    var heads = t.querySelectorAll("thead th");
+    if (heads.length < 4) return;
+    var labels = Array.prototype.map.call(heads, function (th) {
+      return Array.prototype.filter.call(th.childNodes, function (n) {
+        return !(n.classList && n.classList.contains("small-text"));
+      }).map(function (n) { return n.textContent; }).join("").trim();
+    });
+    t.classList.add("stack");
+    t.querySelectorAll("tbody tr").forEach(function (r) {
+      Array.prototype.forEach.call(r.children, function (c, i) {
+        if (labels[i]) c.setAttribute("data-label", labels[i]);
+      });
+    });
+  });
+
   // YouTube: thumbnails become players on click; transcript timestamps (and
   // any other link to a video on this page) seek the player instead of
   // leaving the page. A player scrolled out of view docks in the corner.

@@ -27,7 +27,7 @@ func (r *Renderer) formatResult(res dataview.Result, ctx Context) string {
 		}
 	}
 	if n == 0 && r.dvBool("warnOnEmptyResult", true) {
-		return fmt.Sprintf(`<div class="dv-empty">Dataview: No results to show for %s query.</div>`, res.Type)
+		return `<div class="dv-empty">Nothing right now.</div>`
 	}
 	if r.dvBool("showResultCount", true) {
 		count = fmt.Sprintf(`<span class="dataview small-text">%d</span>`, n)

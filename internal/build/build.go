@@ -166,6 +166,12 @@ func evaluateDataview(cfg *config.Config, r *render.Renderer, ix *index.Index, l
 	if err != nil {
 		return err
 	}
+	if settings == nil {
+		settings = map[string]any{}
+	}
+	for k, v := range cfg.DataviewSettings {
+		settings[k] = v
+	}
 	if d, ok := settings["maxRecursiveRenderDepth"].(float64); ok && d > 0 {
 		r.MaxEmbedDepth = int(d)
 	}

@@ -186,3 +186,17 @@ func TestStrictCountsSitemapWarning(t *testing.T) {
 		t.Fatalf("err %v", err)
 	}
 }
+
+func TestDataviewSettingsOverrideVault(t *testing.T) {
+	requireNode(t)
+	out := t.TempDir()
+	cfg := fixtureConfig(out, "html")
+	cfg.DataviewSettings = map[string]any{"defaultDateFormat": "MMM d"}
+	if _, err := Run(cfg, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	ci := read(t, filepath.Join(out, "current-issues/index.html"))
+	if !strings.Contains(ci, "Sep 30") || strings.Contains(ci, "2026-09-30") {
+		t.Errorf("date format override not applied:\n%s", ci)
+	}
+}

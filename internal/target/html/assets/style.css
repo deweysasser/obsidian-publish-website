@@ -118,6 +118,15 @@ li:has(> input[type=checkbox]) > input { margin: 0 .4em 0 -1.3em; }
   .search { width: auto; flex: 1; }
   .page-title { font-size: 1.6rem; }
 }
+@media (max-width: 600px) {
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+  table.stack thead { display: none; }
+  table.stack tr { border: 1px solid var(--border); border-radius: 6px; margin: .6rem 0; padding: .4rem .7rem; }
+  table.stack td { border: 0; padding: .1rem 0; }
+  table.stack td::before { content: attr(data-label); display: inline-block; min-width: 6.5rem; font-weight: 600; color: var(--muted); font-size: .9em; }
+  table.stack td:first-child { font-weight: 600; font-size: 1.05em; }
+  table.stack td:first-child::before { display: none; }
+}
 .search { position: relative; }
 .search .pagefind-ui__drawer {
   position: absolute; right: 0; top: calc(100% + .25rem); width: min(38rem, 92vw); max-height: 75vh; overflow-y: auto;

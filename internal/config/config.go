@@ -66,12 +66,15 @@ type Config struct {
 	// DataviewScope is the set of notes queries can read: "published" (default)
 	// or "vault" (every note, including excluded ones — their fields and task
 	// text can then appear in query results).
-	DataviewScope string   `yaml:"dataview_scope"`
-	Site          Site     `yaml:"site"`
-	Hugo          Hugo     `yaml:"hugo"`
-	Jekyll        Jekyll   `yaml:"jekyll"`
-	HTML          HTML     `yaml:"html"`
-	Transforms    []string `yaml:"transforms"`
+	DataviewScope string `yaml:"dataview_scope"`
+	// DataviewSettings override the vault's Dataview plugin settings for the
+	// published site only (e.g. defaultDateFormat: "yyyy-MM-dd").
+	DataviewSettings map[string]any `yaml:"dataview_settings"`
+	Site             Site           `yaml:"site"`
+	Hugo             Hugo           `yaml:"hugo"`
+	Jekyll           Jekyll         `yaml:"jekyll"`
+	HTML             HTML           `yaml:"html"`
+	Transforms       []string       `yaml:"transforms"`
 	// ExportFrontmatter copies each note's frontmatter under an "obsidian"
 	// key in hugo/jekyll exports. Off by default: properties often hold data
 	// that is not meant to be published.
