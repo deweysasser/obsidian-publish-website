@@ -45,7 +45,7 @@ func TestRunPagefindLogsElapsed(t *testing.T) {
 	if err := RunPagefind(context.Background(), stubRunner{}, t.TempDir(), zerolog.New(&buf)); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(buf.String(), `"elapsed":`) || !strings.Contains(buf.String(), "Indexed site search") {
+	if !strings.Contains(buf.String(), `"elapsed":"`) || !strings.Contains(buf.String(), "Indexed site search") {
 		t.Errorf("log: %s", buf.String())
 	}
 }

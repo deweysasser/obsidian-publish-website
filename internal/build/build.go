@@ -81,7 +81,7 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Info().Int("notes", len(v.Notes)).Int("published", len(pub.Pages)).Dur("elapsed", time.Since(start)).Msg("Indexed vault")
+	log.Info().Int("notes", len(v.Notes)).Int("published", len(pub.Pages)).Stringer("elapsed", time.Since(start).Round(time.Millisecond)).Msg("Indexed vault")
 
 	r := render.NewRenderer(ix, pub, tgt.Scheme(), tgt.Mode(), func(p string, line int, msg string) {
 		warn(fmt.Sprintf("%s:%d: %s", p, line, msg))
@@ -146,7 +146,7 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 	}
 	rep.Pages, rep.Assets = len(site.Pages), len(site.Assets)
 	log.Info().Int("pages", rep.Pages).Int("assets", rep.Assets).Int("warnings", len(rep.Warnings)).
-		Str("output", cfg.Output).Dur("elapsed", time.Since(start)).Msg("Site built")
+		Str("output", cfg.Output).Stringer("elapsed", time.Since(start).Round(time.Millisecond)).Msg("Site built")
 	return rep, nil
 }
 
@@ -184,7 +184,7 @@ func evaluateDataview(cfg *config.Config, r *render.Renderer, ix *index.Index, l
 		return err
 	}
 	r.SetDataview(res, settings)
-	log.Info().Int("queries", len(reqs)).Dur("elapsed", time.Since(start)).Msg("Evaluated dataview queries")
+	log.Info().Int("queries", len(reqs)).Stringer("elapsed", time.Since(start).Round(time.Millisecond)).Msg("Evaluated dataview queries")
 	return nil
 }
 

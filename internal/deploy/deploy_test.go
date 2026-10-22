@@ -91,7 +91,7 @@ func TestLogsElapsed(t *testing.T) {
 	if _, err := Run(context.Background(), cfgFor(site), r, zerolog.New(&buf)); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(buf.String(), `"message":"Deployed"`) || !strings.Contains(buf.String(), `"elapsed":`) {
+	if !strings.Contains(buf.String(), `"message":"Deployed"`) || !strings.Contains(buf.String(), `"elapsed":"`) {
 		t.Errorf("log: %s", buf.String())
 	}
 }

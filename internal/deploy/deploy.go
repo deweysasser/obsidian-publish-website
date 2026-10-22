@@ -51,6 +51,6 @@ func Run(ctx context.Context, cfg *config.Config, r tools.Runner, log zerolog.Lo
 		return "", err
 	}
 	url := deploymentURLRe.FindString(out)
-	log.Info().Str("url", url).Dur("elapsed", time.Since(start)).Msg("Deployed")
+	log.Info().Str("url", url).Stringer("elapsed", time.Since(start).Round(time.Millisecond)).Msg("Deployed")
 	return url, nil
 }
