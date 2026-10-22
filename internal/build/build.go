@@ -212,20 +212,23 @@ var mdImageRe = regexp.MustCompile(`!\[[^\]]*\]\(\s*<?([^)\s>]+)`)
 // youtubeEmbeds finds the YouTube videos the published notes refer to and asks
 // YouTube which may be embedded (cached; failures count as embeddable).
 func youtubeEmbeds(ix *index.Index, pub *selector.Published, log zerolog.Logger) func(string) bool {
+	seen := map[string]bool{}
 	var ids []string
+	add := func(id string) {
+		if id != "" && !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
 	for p := range pub.Pages {
 		n := ix.Pages[p].Note
 		for _, k := range []string{"video", "url"} {
 			if s, ok := n.Frontmatter[k].(string); ok {
-				if id := youtube.IDOf(s); id != "" {
-					ids = append(ids, id)
-				}
+				add(youtube.IDOf(s))
 			}
 		}
 		for _, m := range mdImageRe.FindAllSubmatch(n.Body, -1) {
-			if id := youtube.IDOf(string(m[1])); id != "" {
-				ids = append(ids, id)
-			}
+			add(youtube.IDOf(string(m[1])))
 		}
 	}
 	cacheDir, err := os.UserCacheDir()
