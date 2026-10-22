@@ -35,6 +35,7 @@ type Target struct {
 	scheme urls.Basic
 	tmpl   *template.Template
 	out    string
+	nav    *nav
 	// Warn receives non-fatal problems.
 	Warn func(string)
 }
@@ -78,7 +79,10 @@ type view struct {
 
 func (t *Target) write(s *target.Site, slug string, v view, current string) error {
 	v.SiteTitle, v.Base, v.Search = s.Config.Site.Title, t.base, s.Config.Search == "pagefind"
-	v.Nav = navHTML(s.Tree, current)
+	if t.nav == nil || t.nav.root != s.Tree {
+		t.nav = newNav(s.Tree)
+	}
+	v.Nav = t.nav.html(current)
 	v.Math = strings.Contains(string(v.Content), `class="math`)
 	v.Mermaid = strings.Contains(string(v.Content), `class="mermaid"`)
 	var buf bytes.Buffer
@@ -98,7 +102,7 @@ func (t *Target) write(s *target.Site, slug string, v view, current string) erro
 const notFoundSlug = "\x00404"
 
 // reserved top-level slugs used by generated pages and static files.
-var reserved = map[string]bool{"all": true, "tags": true, "assets": true, "pagefind": true}
+var reserved = map[string]bool{"tags": true, "assets": true, "pagefind": true}
 
 // WritePage writes one note page.
 func (t *Target) WritePage(s *target.Site, p *render.Page) error {
@@ -147,13 +151,10 @@ func (t *Target) Finalize(s *target.Site) error {
 	if err != nil {
 		return err
 	}
-	if err := t.write(s, "all", view{Title: "All pages", Content: allPagesHTML(s.Tree)}, t.scheme.PageURL("all")); err != nil {
-		return err
-	}
 	if err := t.writeTags(s); err != nil {
 		return err
 	}
-	if err := t.write(s, notFoundSlug, view{Title: "Not found", Content: template.HTML(`<p>That page does not exist. Try the <a href="` + t.base + `all/">list of all pages</a>.</p>`)}, ""); err != nil {
+	if err := t.write(s, notFoundSlug, view{Title: "Not found", Content: template.HTML(`<p>That page does not exist. Try the <a href="` + t.base + `">home page</a> or search.</p>`)}, ""); err != nil {
 		return err
 	}
 	if err := target.WriteFile(t.out, ".nojekyll", nil); err != nil {
@@ -172,6 +173,11 @@ func (t *Target) Finalize(s *target.Site) error {
 		return err
 	}
 	return t.writeSitemap(s)
+}
+
+// writeRobots points crawlers at the sitemap (which needs an absolute base_url).
+func (t *Target) writeRobots(origin string) error {
+	return target.WriteFile(t.out, "robots.txt", []byte("User-agent: *\nAllow: /\nSitemap: "+origin+t.base+"sitemap.xml\n"))
 }
 
 func (t *Target) writeTags(s *target.Site) error {
@@ -216,6 +222,9 @@ func (t *Target) writeSitemap(s *target.Site) error {
 		return nil // warned at build start
 	}
 	origin := u.Scheme + "://" + u.Host
+	if err := t.writeRobots(origin); err != nil {
+		return err
+	}
 	var entries []urlEntry
 	seen := map[string]bool{}
 	for _, p := range s.Pages {
@@ -272,9 +281,35 @@ func crumbs(s *target.Site, sourcePath, slug string) []crumb {
 	return out
 }
 
-func navHTML(root *target.FolderNode, current string) template.HTML {
+// nav renders the site navigation for one page: every top-level entry, plus
+// the contents of each folder on the path to the current page. Listing the
+// whole tree on every page makes the site quadratic in size.
+type nav struct {
+	root   *target.FolderNode
+	parent map[*target.FolderNode]*target.FolderNode
+	owner  map[string]*target.FolderNode // page or folder URL → folder to expand
+}
+
+func newNav(root *target.FolderNode) *nav {
+	n := &nav{root: root, parent: map[*target.FolderNode]*target.FolderNode{}, owner: map[string]*target.FolderNode{}}
+	root.Walk(func(f *target.FolderNode) {
+		n.owner[f.URL] = f
+		for _, c := range f.Folders {
+			n.parent[c] = f
+		}
+		for _, p := range f.Pages {
+			n.owner[p.URL] = f
+		}
+	})
+	return n
+}
+
+func (n *nav) html(current string) template.HTML {
+	open := map[*target.FolderNode]bool{n.root: true}
+	for f := n.owner[current]; f != nil; f = n.parent[f] {
+		open[f] = true
+	}
 	var b strings.Builder
-	var walk func(n *target.FolderNode)
 	link := func(url, title string) {
 		cur := ""
 		if url == current {
@@ -282,41 +317,28 @@ func navHTML(root *target.FolderNode, current string) template.HTML {
 		}
 		fmt.Fprintf(&b, `<a href="%s"%s>%s</a>`, template.HTMLEscapeString(url), cur, template.HTMLEscapeString(title))
 	}
-	contains := func(n *target.FolderNode) bool {
-		hit := false
-		n.Walk(func(m *target.FolderNode) {
-			if m.URL == current {
-				hit = true
-			}
-			for _, p := range m.Pages {
-				if p.URL == current {
-					hit = true
-				}
-			}
-		})
-		return hit
-	}
-	walk = func(n *target.FolderNode) {
+	var walk func(f *target.FolderNode)
+	walk = func(f *target.FolderNode) {
 		b.WriteString("<ul>")
-		for _, f := range n.Folders {
-			open := ""
-			if contains(f) {
-				open = " open"
+		for _, c := range f.Folders {
+			if open[c] {
+				b.WriteString(`<li class="folder open">`)
+				link(c.URL, c.Name)
+				walk(c)
+			} else {
+				b.WriteString(`<li class="folder">`)
+				link(c.URL, c.Name)
 			}
-			fmt.Fprintf(&b, `<li class="folder"><details%s><summary>`, open)
-			link(f.URL, f.Name)
-			b.WriteString("</summary>")
-			walk(f)
-			b.WriteString("</details></li>")
+			b.WriteString("</li>")
 		}
-		for _, p := range n.Pages {
+		for _, p := range f.Pages {
 			b.WriteString("<li>")
 			link(p.URL, p.Title)
 			b.WriteString("</li>")
 		}
 		b.WriteString("</ul>")
 	}
-	walk(root)
+	walk(n.root)
 	return template.HTML(b.String())
 }
 
@@ -330,30 +352,6 @@ func listingHTML(n *target.FolderNode) template.HTML {
 		fmt.Fprintf(&b, `<li><a href="%s">%s</a></li>`, template.HTMLEscapeString(p.URL), template.HTMLEscapeString(p.Title))
 	}
 	b.WriteString("</ul>")
-	return template.HTML(b.String())
-}
-
-func allPagesHTML(root *target.FolderNode) template.HTML {
-	var b strings.Builder
-	root.Walk(func(n *target.FolderNode) {
-		var pages []*render.Page
-		if n.Page != nil {
-			pages = append(pages, n.Page)
-		}
-		pages = append(pages, n.Pages...)
-		if len(pages) == 0 {
-			return
-		}
-		name := n.Name
-		if n.Slug == "" {
-			name = "Home"
-		}
-		fmt.Fprintf(&b, `<h2><a href="%s">%s</a></h2><ul class="listing">`, template.HTMLEscapeString(n.URL), template.HTMLEscapeString(name))
-		for _, p := range pages {
-			fmt.Fprintf(&b, `<li><a href="%s">%s</a></li>`, template.HTMLEscapeString(p.URL), template.HTMLEscapeString(p.Title))
-		}
-		b.WriteString("</ul>")
-	})
 	return template.HTML(b.String())
 }
 

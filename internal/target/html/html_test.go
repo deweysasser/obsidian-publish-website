@@ -2,6 +2,7 @@ package html
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -82,4 +83,61 @@ func grepTitle(b []byte) string {
 		return ""
 	}
 	return s[i : j+8]
+}
+
+func navTree() *target.FolderNode {
+	pg := func(slug string) *render.Page {
+		return &render.Page{Slug: slug, URL: "/" + slug + "/", Title: path.Base(slug)}
+	}
+	b := &target.FolderNode{Name: "B", Folder: "R/A/B", Slug: "a/b", URL: "/a/b/", Pages: []*render.Page{pg("a/b/b1")}}
+	a := &target.FolderNode{Name: "A", Folder: "R/A", Slug: "a", URL: "/a/", Folders: []*target.FolderNode{b},
+		Pages: []*render.Page{pg("a/a1"), pg("a/a2")}}
+	c := &target.FolderNode{Name: "C", Folder: "R/C", Slug: "c", URL: "/c/", Pages: []*render.Page{pg("c/c1")}}
+	return &target.FolderNode{Folder: "R", URL: "/", Folders: []*target.FolderNode{a, c}, Pages: []*render.Page{pg("top")}}
+}
+
+func TestNavExpandsOnlyThePathToTheCurrentPage(t *testing.T) {
+	root := navTree()
+	for _, tc := range []struct {
+		current   string
+		want, not []string
+	}{
+		{"/a/b/b1/", []string{"/a/", "/a/b/", "/a/b/b1/", "/a/a1/", "/a/a2/", "/c/", "/top/"}, []string{"/c/c1/"}},
+		{"/a/", []string{"/a/", "/a/b/", "/a/a1/", "/c/", "/top/"}, []string{"/a/b/b1/", "/c/c1/"}},
+		{"/", []string{"/a/", "/c/", "/top/"}, []string{"/a/a1/", "/a/b/", "/c/c1/"}},
+	} {
+		nav := string(newNav(root).html(tc.current))
+		for _, u := range tc.want {
+			if !strings.Contains(nav, `href="`+u+`"`) {
+				t.Errorf("%s: nav lacks %s:\n%s", tc.current, u, nav)
+			}
+		}
+		for _, u := range tc.not {
+			if strings.Contains(nav, `href="`+u+`"`) {
+				t.Errorf("%s: nav should not list %s:\n%s", tc.current, u, nav)
+			}
+		}
+		if tc.current != "/" && !strings.Contains(nav, `href="`+tc.current+`" aria-current="page"`) {
+			t.Errorf("%s: current page not marked", tc.current)
+		}
+	}
+}
+
+func TestFinalizeWritesRobotsAndNoAllPage(t *testing.T) {
+	out := t.TempDir()
+	cfg := &config.Config{Output: out, Search: "none", Site: config.Site{Title: "S", BaseURL: "https://x.io/sub/"}}
+	tg, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tg.Finalize(&target.Site{Config: cfg, Tree: navTree(), Tags: map[string][]*render.Page{}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "all")); err == nil {
+		t.Error("/all/ page still written")
+	}
+	robots, _ := os.ReadFile(filepath.Join(out, "robots.txt"))
+	if !strings.Contains(string(robots), "Sitemap: https://x.io/sub/sitemap.xml") {
+		t.Errorf("robots.txt: %q", robots)
+	}
 }

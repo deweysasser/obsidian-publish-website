@@ -46,8 +46,10 @@ a:hover { text-decoration: underline; }
 .site-nav a { color: var(--fg); display: block; padding: .1rem .35rem; border-radius: 4px; overflow-wrap: anywhere; }
 .site-nav a:hover { background: var(--border); text-decoration: none; }
 .site-nav a[aria-current=page] { background: var(--accent); color: #fff; }
-.site-nav summary { cursor: pointer; padding: .1rem 0; color: var(--muted); font-weight: 600; }
-.site-nav summary a { display: inline; padding: 0; color: inherit; }
+.site-nav .folder > a { color: var(--muted); font-weight: 600; }
+.site-nav .folder > a::before { content: "▸"; display: inline-block; width: 1em; }
+.site-nav .folder.open > a::before { content: "▾"; }
+.site-nav .folder > a[aria-current=page] { color: #fff; }
 .nav-extra { margin-top: 1rem !important; padding-top: .75rem !important; border-top: 1px solid var(--border); }
 .content { padding: 1.5rem 2.5rem 4rem; max-width: 52rem; width: 100%; overflow-wrap: break-word; }
 .breadcrumbs { list-style: none; padding: 0; margin: 0 0 .5rem; display: flex; flex-wrap: wrap; font-size: .85rem; color: var(--muted); }

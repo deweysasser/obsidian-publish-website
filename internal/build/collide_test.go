@@ -30,7 +30,7 @@ func buildTiny(t *testing.T, files map[string]string) (string, error) {
 }
 
 func TestReservedSlugRejected(t *testing.T) {
-	for _, name := range []string{"Tags.md", "All.md", "assets/x.md", "Pagefind.md"} {
+	for _, name := range []string{"Tags.md", "assets/x.md", "Pagefind.md"} {
 		if _, err := buildTiny(t, map[string]string{"a.md": "a", name: "x"}); err == nil || !strings.Contains(err.Error(), "reserved") {
 			t.Errorf("%s: want reserved-slug error, got %v", name, err)
 		}

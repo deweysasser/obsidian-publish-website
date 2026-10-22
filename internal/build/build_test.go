@@ -41,7 +41,7 @@ func TestBuildHTMLFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, f := range []string{"index.html", "issues/road-repair/index.html", "videos/2026-08-19-meeting/index.html",
-		"issues/index.html", "videos/index.html", "all/index.html", "tags/index.html", "tags/civic-roads/index.html",
+		"issues/index.html", "videos/index.html", "robots.txt", "tags/index.html", "tags/civic-roads/index.html",
 		"sitemap.xml", "404.html", ".nojekyll", "assets/style.css", "current-issues/index.html", "issues/café-permit/index.html"} {
 		if _, err := os.Stat(filepath.Join(out, f)); err != nil {
 			t.Errorf("missing %s", f)
