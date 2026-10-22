@@ -2,6 +2,7 @@ package render
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -93,4 +94,64 @@ func TestUSMapFolderResolution(t *testing.T) {
 	if strings.Contains(out, "<a ") || len(*warns) != 1 || !strings.Contains((*warns)[0].msg, "Nowhere") {
 		t.Errorf("missing folder should warn and link nothing: %v", *warns)
 	}
+}
+
+func stateMapRenderer(t *testing.T) (*Renderer, *[]warning) {
+	t.Helper()
+	dir := t.TempDir()
+	writeFile(t, dir, "Town/Town.md", "home")
+	writeFile(t, dir, "Town/US/Massachusetts/Massachusetts.md", "```statemap\n```\n")
+	writeFile(t, dir, "Town/US/Massachusetts/Boston/Boston.md", "b")
+	writeFile(t, dir, "Town/US/Massachusetts/Worcester.md", "a town note without a folder")
+	writeFile(t, dir, "Town/US/Massachusetts/Smallville/Smallville.md", "---\ncoordinates: [42.1, -72.6]\n---\n")
+	writeFile(t, dir, "Town/US/Massachusetts/Atlantis/x.md", "x")
+	writeFile(t, dir, "Town/US/Rhode Island/Providence/Providence.md", "p")
+	return newTestRenderer(t, dir, ModeHTML)
+}
+
+func TestStateMapDotsTowns(t *testing.T) {
+	r, warns := stateMapRenderer(t)
+	out, err := r.Preprocess([]byte("```statemap\n```\n"), 1, Context{Path: "Town/US/Massachusetts/Massachusetts.md"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `<figure class="statemap">`) {
+		t.Fatalf("no state map:\n%.300s", out)
+	}
+	for _, town := range []string{"boston/", "worcester/", "smallville/"} {
+		if !regexp.MustCompile(`<a href="/c/us/massachusetts/` + town + `"><title>[^<]+</title><circle `).MatchString(out) {
+			t.Errorf("no dot for %s", town)
+		}
+	}
+	if !strings.Contains(out, `<path class="st"`) || !strings.Contains(out, `<a href="/c/us/rhode-island/"><title>Rhode Island</title><path class="nb"`) {
+		t.Error("state outline or linked neighbour missing")
+	}
+	if strings.Contains(out, "<title>Wyoming</title>") {
+		t.Error("far-away states should be left out")
+	}
+	if fig := out[strings.Index(out, "<figure"):strings.Index(out, "</figure>")]; strings.Contains(fig, "\n\n") {
+		t.Error("blank line inside the map would end the raw HTML block")
+	}
+	if len(*warns) != 1 || !strings.Contains((*warns)[0].msg, "Atlantis") {
+		t.Errorf("want one warning about the unknown town, got %v", *warns)
+	}
+}
+
+func TestStateMapCoordinatesOverride(t *testing.T) {
+	r, _ := stateMapRenderer(t)
+	out := pre(t, r, "```statemap\nUS/Massachusetts\n```\n")
+	m := regexp.MustCompile(`<title>Smallville</title><circle cx="([\d.]+)" cy="([\d.]+)"`).FindStringSubmatch(out)
+	b := regexp.MustCompile(`<title>Boston</title><circle cx="([\d.]+)" cy="([\d.]+)"`).FindStringSubmatch(out)
+	if m == nil || b == nil {
+		t.Fatalf("dots missing:\n%.600s", out)
+	}
+	// Smallville's override (western MA) puts it well west of Boston.
+	if sx, _ := strconv.ParseFloat(m[1], 64); sx >= mustFloat(b[1])-10 {
+		t.Errorf("override ignored: Smallville x %s, Boston x %s", m[1], b[1])
+	}
+}
+
+func mustFloat(s string) float64 {
+	f, _ := strconv.ParseFloat(s, 64)
+	return f
 }

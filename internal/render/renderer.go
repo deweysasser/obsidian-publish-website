@@ -74,6 +74,7 @@ func NewRenderer(ix *index.Index, pub *selector.Published, u urls.Scheme, mode M
 	r.fenceHooks["dataviewjs"] = r.dvJS
 	r.fenceHooks["transcript"] = r.transcriptBlock
 	r.fenceHooks["usmap"] = r.usmapBlock
+	r.fenceHooks["statemap"] = r.statemapBlock
 	r.inlineHook = r.dvInline
 	return r
 }

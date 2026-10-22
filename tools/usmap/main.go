@@ -1,8 +1,12 @@
-// Command usmap turns simplified Census state boundaries (GeoJSON, lon/lat)
-// into the projected SVG paths the usmap block draws. See build.sh.
+// Command usmap generates internal/usmap's embedded data: projected SVG
+// paths for every state and territory (from simplified Census boundaries,
+// GeoJSON) and a place-name lookup (from Census gazetteer files). See
+// build.sh.
 package main
 
 import (
+	"bufio"
+	"compress/gzip"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,31 +17,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/deweysasser/obsidian-publish-website/internal/usmap"
 )
-
-// Region is one state or territory in the generated map.
-type Region struct {
-	Code    string   `json:"code"`
-	Name    string   `json:"name"`
-	Aliases []string `json:"aliases,omitempty"`
-	D       string   `json:"d"`
-	// Box is a clickable labelled square for regions too small to hit
-	// (small Northeast states) or drawn in an inset (territories).
-	Box *Box `json:"box,omitempty"`
-}
-
-// Box is a labelled square; X, Y is its top-left corner.
-type Box struct {
-	X, Y, W, H float64
-	// Frame draws an inset frame around a territory shown at its own scale.
-	Frame bool `json:"frame,omitempty"`
-}
-
-// Map is the generated file.
-type Map struct {
-	W, H    float64
-	Regions []Region `json:"regions"`
-}
 
 const (
 	width  = 960
@@ -59,6 +42,9 @@ var territories = []string{"PR", "VI", "GU", "MP", "AS"}
 
 type pt struct{ x, y float64 }
 
+// shape is one region's polygons (rings of lon/lat) before projection.
+type shape [][][]pt
+
 type feature struct {
 	Properties struct{ STUSPS, NAME string }
 	Geometry   struct {
@@ -69,130 +55,137 @@ type feature struct {
 
 func main() {
 	in := flag.String("in", "", "simplified GeoJSON files, comma-separated")
-	out := flag.String("out", "internal/render/usmap.json", "output")
+	out := flag.String("out", "internal/usmap/usmap.json", "map output")
+	gaz := flag.String("gazetteer", "", "Census gazetteer files (place, cousubs, counties), comma-separated")
+	placesOut := flag.String("places", "internal/usmap/places.tsv.gz", "place lookup output")
 	flag.Parse()
-	var fc struct{ Features []feature }
-	for _, f := range strings.Split(*in, ",") {
-		b, err := os.ReadFile(f)
+	if *in != "" {
+		writeMap(strings.Split(*in, ","), *out)
+	}
+	if *gaz != "" {
+		writePlaces(strings.Split(*gaz, ","), *placesOut)
+	}
+}
+
+func readShapes(files []string) (map[string]shape, map[string]string) {
+	shapes, census := map[string]shape{}, map[string]string{}
+	for _, file := range files {
+		b, err := os.ReadFile(file)
 		if err != nil {
 			log.Fatal(err)
 		}
-		var part struct{ Features []feature }
-		if err := json.Unmarshal(b, &part); err != nil {
+		var fc struct{ Features []feature }
+		if err := json.Unmarshal(b, &fc); err != nil {
 			log.Fatal(err)
 		}
-		fc.Features = append(fc.Features, part.Features...)
-	}
-	polys := map[string][][][]pt{} // code -> polygons -> rings
-	names2 := map[string]string{}
-	for _, f := range fc.Features {
-		var mp [][][][2]float64
-		switch f.Geometry.Type {
-		case "Polygon":
-			var p [][][2]float64
-			if err := json.Unmarshal(f.Geometry.Coordinates, &p); err != nil {
-				log.Fatal(err)
-			}
-			mp = [][][][2]float64{p}
-		case "MultiPolygon":
-			if err := json.Unmarshal(f.Geometry.Coordinates, &mp); err != nil {
-				log.Fatal(err)
-			}
-		default:
-			log.Fatalf("%s: %s", f.Properties.STUSPS, f.Geometry.Type)
-		}
-		c := f.Properties.STUSPS
-		names2[c] = f.Properties.NAME
-		for _, p := range mp {
-			var rings [][]pt
-			for _, r := range p {
-				var ring []pt
-				for _, ll := range r {
-					lon := ll[0]
-					if lon > 0 && c != "GU" && c != "MP" { // Aleutians across the antimeridian
-						lon -= 360
-					}
-					ring = append(ring, pt{lon, ll[1]})
+		for _, f := range fc.Features {
+			var mp [][][][2]float64
+			switch f.Geometry.Type {
+			case "Polygon":
+				var p [][][2]float64
+				if err := json.Unmarshal(f.Geometry.Coordinates, &p); err != nil {
+					log.Fatal(err)
 				}
-				rings = append(rings, ring)
+				mp = [][][][2]float64{p}
+			case "MultiPolygon":
+				if err := json.Unmarshal(f.Geometry.Coordinates, &mp); err != nil {
+					log.Fatal(err)
+				}
+			default:
+				log.Fatalf("%s: %s", f.Properties.STUSPS, f.Geometry.Type)
 			}
-			polys[c] = append(polys[c], rings)
+			c := f.Properties.STUSPS
+			census[c] = f.Properties.NAME
+			for _, p := range mp {
+				var rings [][]pt
+				for _, r := range p {
+					var ring []pt
+					for _, ll := range r {
+						ring = append(ring, pt{ll[0], ll[1]})
+					}
+					rings = append(rings, ring)
+				}
+				shapes[c] = append(shapes[c], rings)
+			}
 		}
+	}
+	return shapes, census
+}
+
+func writeMap(files []string, out string) {
+	shapes, census := readShapes(files)
+	m := usmap.Map{W: width, H: height}
+	add := func(c, group string, p usmap.Projection, s shape) *usmap.Region {
+		m.Regions = append(m.Regions, usmap.Region{Code: c, Group: group, Proj: p})
+		r := &m.Regions[len(m.Regions)-1]
+		r.D, r.BBox = pathD(s, p)
+		return r
 	}
 
-	m := Map{W: width, H: height}
-	lower48 := albers(-96, 37.5, 29.5, 45.5)
-	// Fit the lower 48 into the left part of the frame, leaving room for the
+	// The lower 48 fit the left part of the frame, leaving room for the
 	// small-state squares on the right and the insets below.
-	var proj = map[string][][][]pt{}
-	for c, ps := range polys {
-		if c == "AK" || c == "HI" || isTerritory(c) {
-			continue
+	lower48 := usmap.Projection{Kind: "albers", Lon0: -96, Lat0: 37.5, Lat1: 29.5, Lat2: 45.5}
+	var main []string
+	for c := range shapes {
+		if c != "AK" && c != "HI" && !slices.Contains(territories, c) {
+			main = append(main, c)
 		}
-		proj[c] = project(ps, lower48)
 	}
-	minx, miny, maxx, maxy := bounds(proj)
-	s := math.Min(860/(maxx-minx), 470/(maxy-miny))
-	place(proj, s, 10-minx*s, 10-miny*s)
-	mainScale := s
+	sort.Strings(main)
+	x0, y0, x1, y1 := rawBounds(lower48, shapes, main...)
+	s := math.Min(860/(x1-x0), 470/(y1-y0))
+	lower48.S, lower48.DX, lower48.DY = s, 10-x0*s, 10+y1*s
+	for _, c := range main {
+		add(c, "lower48", lower48, shapes[c])
+	}
 
 	// Alaska at 35% of true scale, Hawaii at true scale, bottom left.
-	inset := func(c string, p func(pt) pt, scale, left, bottom float64) {
-		r := map[string][][][]pt{c: project(polys[c], p)}
-		x0, y0, x1, y1 := bounds(r)
-		_ = x1
-		place(r, scale, left-x0*scale, bottom-(y1-y0)*scale-y0*scale)
-		proj[c] = r[c]
+	inset := func(c string, p usmap.Projection, scale, left, bottom float64) {
+		x0, y0, _, _ := rawBounds(p, shapes, c)
+		p.S, p.DX, p.DY = scale, left-x0*scale, bottom+y0*scale
+		add(c, c, p, shapes[c])
 	}
-	inset("AK", albers(-154, 50, 55, 65), mainScale*0.35, 10, 590)
-	inset("HI", albers(-157, 3, 8, 18), mainScale, 210, 585)
-
-	for c, ps := range proj {
-		m.Regions = append(m.Regions, Region{Code: c, D: pathD(ps)})
-	}
+	inset("AK", usmap.Projection{Kind: "albers", Lon0: -154, Lat0: 50, Lat1: 55, Lat2: 65}, s*0.35, 10, 590)
+	inset("HI", usmap.Projection{Kind: "albers", Lon0: -157, Lat0: 3, Lat1: 8, Lat2: 18}, s, 210, 585)
 
 	// Territories: each fitted into its own framed box along the bottom.
 	const tw, th, gap = 70.0, 52.0, 8.0
 	for i, c := range territories {
-		bx := Box{X: 960 - 10 - float64(len(territories)-i)*(tw+gap) + gap, Y: height - 10 - th, W: tw, H: th, Frame: true}
-		// Fit the main islands; outliers (Swains, the northern Marianas)
-		// would shrink them to specks.
-		r := map[string][][][]pt{c: project(mainIslands(polys[c]), mercator)}
-		x0, y0, x1, y1 := bounds(r)
-		sc := math.Min((tw-10)/(x1-x0), (th-22)/(y1-y0))
-		place(r, sc, bx.X+(tw-(x1-x0)*sc)/2-x0*sc, bx.Y+4+(th-22-(y1-y0)*sc)/2-y0*sc)
-		m.Regions = append(m.Regions, Region{Code: c, D: pathD(r[c]), Box: &bx})
+		bx := usmap.Box{X: width - 10 - float64(len(territories)-i)*(tw+gap) + gap, Y: height - 10 - th, W: tw, H: th, Frame: true}
+		sh := mainIslands(shapes[c])
+		p := usmap.Projection{Kind: "mercator"}
+		x0, y0, x1, y1 := rawBounds(p, map[string]shape{c: sh}, c)
+		p.S = math.Min((tw-10)/(x1-x0), (th-22)/(y1-y0))
+		p.DX = bx.X + (tw-(x1-x0)*p.S)/2 - x0*p.S
+		p.DY = bx.Y + 4 + (th-22-(y1-y0)*p.S)/2 + y1*p.S
+		add(c, c, p, sh).Box = &bx
 	}
 
 	// Small states: squares in a column east of the coast, at the state's
 	// latitude where possible, without overlapping.
-	byCode := map[string]*Region{}
-	for i := range m.Regions {
-		byCode[m.Regions[i].Code] = &m.Regions[i]
-	}
 	const sq, sgap = 20.0, 3.0
 	type cy struct {
-		c string
+		r *usmap.Region
 		y float64
 	}
 	var col []cy
-	for _, c := range small {
-		_, y0, _, y1 := bounds(map[string][][][]pt{c: proj[c]})
-		col = append(col, cy{c, (y0+y1)/2 - sq/2})
+	for i := range m.Regions {
+		r := &m.Regions[i]
+		if slices.Contains(small, r.Code) {
+			col = append(col, cy{r, (r.BBox[1]+r.BBox[3])/2 - sq/2})
+		}
 	}
 	sort.Slice(col, func(i, j int) bool { return col[i].y < col[j].y })
 	for i := 1; i < len(col); i++ {
-		if col[i].y < col[i-1].y+sq+sgap {
-			col[i].y = col[i-1].y + sq + sgap
-		}
+		col[i].y = math.Max(col[i].y, col[i-1].y+sq+sgap)
 	}
 	for _, e := range col {
-		byCode[e.c].Box = &Box{X: 790, Y: e.y, W: 36, H: sq}
+		e.r.Box = &usmap.Box{X: 790, Y: e.y, W: 36, H: sq}
 	}
 
 	for i := range m.Regions {
 		r := &m.Regions[i]
-		r.Name = names2[r.Code]
+		r.Name = census[r.Code]
 		if n, ok := names[r.Code]; ok {
 			r.Name = n[0]
 			r.Aliases = strings.Split(n[1], "|")
@@ -206,17 +199,33 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := os.WriteFile(*out, append(j, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(out, append(j, '\n'), 0o644); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("wrote %s (%d bytes)\n", *out, len(j))
+	fmt.Printf("wrote %s (%d bytes)\n", out, len(j))
 }
 
-func isTerritory(c string) bool { return slices.Contains(territories, c) }
+// rawBounds is the extent of the named shapes under p's raw projection,
+// y up.
+func rawBounds(p usmap.Projection, shapes map[string]shape, codes ...string) (x0, y0, x1, y1 float64) {
+	x0, y0, x1, y1 = math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+	for _, c := range codes {
+		for _, poly := range shapes[c] {
+			for _, r := range poly {
+				for _, q := range r {
+					x, y := p.Raw(q.x, q.y)
+					x0, x1 = math.Min(x0, x), math.Max(x1, x)
+					y0, y1 = math.Min(y0, y), math.Max(y1, y)
+				}
+			}
+		}
+	}
+	return
+}
 
-// mainIslands keeps the polygons near the largest one (lon/lat input), so
-// outliers (Swains, the northern Marianas) don't shrink the inset to specks.
-func mainIslands(ps [][][]pt) [][][]pt {
+// mainIslands keeps the polygons near the largest one, so outliers (Swains,
+// the northern Marianas) don't shrink an inset to specks.
+func mainIslands(s shape) shape {
 	area := func(r []pt) float64 {
 		a := 0.0
 		for i := range r {
@@ -226,18 +235,22 @@ func mainIslands(ps [][][]pt) [][][]pt {
 		return math.Abs(a / 2)
 	}
 	center := func(r []pt) pt {
-		x0, y0, x1, y1 := bounds(map[string][][][]pt{"": {{r}}})
+		x0, y0, x1, y1 := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+		for _, q := range r {
+			x0, x1 = math.Min(x0, q.x), math.Max(x1, q.x)
+			y0, y1 = math.Min(y0, q.y), math.Max(y1, q.y)
+		}
 		return pt{(x0 + x1) / 2, (y0 + y1) / 2}
 	}
 	var big []pt
-	for _, p := range ps {
+	for _, p := range s {
 		if big == nil || area(p[0]) > area(big) {
 			big = p[0]
 		}
 	}
 	c := center(big)
-	var out [][][]pt
-	for _, p := range ps {
+	var out shape
+	for _, p := range s {
 		if q := center(p[0]); math.Hypot(q.x-c.x, q.y-c.y) < 0.8 {
 			out = append(out, p)
 		}
@@ -245,100 +258,41 @@ func mainIslands(ps [][][]pt) [][][]pt {
 	return out
 }
 
-// albers returns a conic equal-area projection (unscaled, y up).
-func albers(lon0, lat0, lat1, lat2 float64) func(pt) pt {
-	rad := math.Pi / 180
-	n := (math.Sin(lat1*rad) + math.Sin(lat2*rad)) / 2
-	c := math.Cos(lat1*rad)*math.Cos(lat1*rad) + 2*n*math.Sin(lat1*rad)
-	rho0 := math.Sqrt(c-2*n*math.Sin(lat0*rad)) / n
-	return func(p pt) pt {
-		rho := math.Sqrt(c-2*n*math.Sin(p.y*rad)) / n
-		th := n * (p.x - lon0) * rad
-		return pt{rho * math.Sin(th), rho0 - rho*math.Cos(th)}
-	}
-}
-
-func mercator(p pt) pt {
-	rad := math.Pi / 180
-	return pt{p.x * rad, math.Log(math.Tan(math.Pi/4 + p.y*rad/2))}
-}
-
-// project applies f and flips y so it grows downward, as in SVG.
-func project(ps [][][]pt, f func(pt) pt) [][][]pt {
-	var out [][][]pt
-	for _, p := range ps {
-		var rings [][]pt
-		for _, r := range p {
-			var ring []pt
-			for _, q := range r {
-				q = f(q)
-				ring = append(ring, pt{q.x, -q.y})
-			}
-			rings = append(rings, ring)
-		}
-		out = append(out, rings)
-	}
-	return out
-}
-
-func bounds(m map[string][][][]pt) (minx, miny, maxx, maxy float64) {
-	minx, miny, maxx, maxy = math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
-	for _, ps := range m {
-		for _, p := range ps {
-			for _, r := range p {
-				for _, q := range r {
-					minx, maxx = math.Min(minx, q.x), math.Max(maxx, q.x)
-					miny, maxy = math.Min(miny, q.y), math.Max(maxy, q.y)
-				}
-			}
-		}
-	}
-	return
-}
-
-func place(m map[string][][][]pt, s, dx, dy float64) {
-	for _, ps := range m {
-		for _, p := range ps {
-			for _, r := range p {
-				for i, q := range r {
-					r[i] = pt{q.x*s + dx, q.y*s + dy}
-				}
-			}
-		}
-	}
-}
-
-// pathD writes rings as compact SVG path data: absolute start, relative
-// steps between coordinates rounded to 0.1, dropping repeated points.
-func pathD(ps [][][]pt) string {
+// pathD projects rings into compact SVG path data (absolute start, relative
+// steps between coordinates rounded to 0.1, repeated points dropped) and
+// returns the extent.
+func pathD(s shape, p usmap.Projection) (string, [4]float64) {
 	var b strings.Builder
-	for _, p := range ps {
-		for _, r := range p {
+	bb := [4]float64{math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)}
+	for _, poly := range s {
+		for _, r := range poly {
 			var px, py int
-			first := true
-			n := 0
+			first, n := true, 0
 			for _, q := range r {
-				x, y := int(math.Round(q.x*10)), int(math.Round(q.y*10))
-				if first {
+				fx, fy := p.Point(q.x, q.y)
+				bb = [4]float64{math.Min(bb[0], fx), math.Min(bb[1], fy), math.Max(bb[2], fx), math.Max(bb[3], fy)}
+				x, y := int(math.Round(fx*10)), int(math.Round(fy*10))
+				switch {
+				case first:
 					b.WriteString("M" + num(x) + " " + num(y))
 					first = false
-				} else if x != px || y != py {
-					if n == 0 {
-						b.WriteString("l")
-					} else {
-						b.WriteString(" ")
-					}
-					b.WriteString(num(x-px) + " " + num(y-py))
-					n++
-				} else {
+				case x == px && y == py:
 					continue
+				case n == 0:
+					b.WriteString("l" + num(x-px) + " " + num(y-py))
+					n++
+				default:
+					b.WriteString(" " + num(x-px) + " " + num(y-py))
 				}
 				px, py = x, y
 			}
 			b.WriteString("z")
 		}
 	}
-	return b.String()
+	for i := range bb {
+		bb[i] = math.Round(bb[i]*10) / 10
+	}
+	return b.String(), bb
 }
 
 // num formats tenths compactly: 12 -> "1.2", -5 -> "-.5", 30 -> "3".
@@ -358,4 +312,152 @@ func num(t int) string {
 		s = "-" + s
 	}
 	return s
+}
+
+// newEngland states govern through towns (county subdivisions), not places.
+var newEngland = []string{"CT", "ME", "MA", "NH", "RI", "VT"}
+
+type place struct {
+	rank     int
+	lat, lon string
+}
+
+// writePlaces reduces the gazetteer files to one entry per state and
+// lower-cased name, keeping the likeliest local government: New England
+// towns, then incorporated places, counties, other towns, statistical places
+// (CDPs) and defunct ones.
+func writePlaces(files []string, out string) {
+	best := map[string]place{}
+	put := func(st, name string, rank int, lat, lon string) {
+		k := st + "\t" + strings.ToLower(name)
+		if p, ok := best[k]; !ok || rank < p.rank {
+			best[k] = place{rank, lat, lon}
+		}
+	}
+	for _, file := range files {
+		f, err := os.Open(file)
+		if err != nil {
+			log.Fatal(err)
+		}
+		sc := bufio.NewScanner(f)
+		sc.Buffer(nil, 1<<20)
+		var col map[string]int
+		for sc.Scan() {
+			fs := strings.Split(sc.Text(), "\t")
+			for i := range fs {
+				fs[i] = strings.TrimSpace(fs[i])
+			}
+			if col == nil {
+				col = map[string]int{}
+				for i, h := range fs {
+					col[h] = i
+				}
+				continue
+			}
+			get := func(h string) string {
+				if i, ok := col[h]; ok && i < len(fs) {
+					return fs[i]
+				}
+				return ""
+			}
+			st, full, status := get("USPS"), get("NAME"), get("FUNCSTAT")
+			lat, lon := trim(get("INTPTLAT")), trim(get("INTPTLONG"))
+			_, isPlace := col["LSAD"]
+			_, hasStatus := col["FUNCSTAT"]
+			isCousub := hasStatus && !isPlace
+			if !isPlace && !isCousub { // counties: "Alamance County"
+				put(st, full, 2, lat, lon)
+				continue
+			}
+			active := status == "A" || status == "F" || status == "B" || status == "C"
+			var rank int
+			switch {
+			case isCousub && active && slices.Contains(newEngland, st):
+				rank = 0
+			case isPlace && active:
+				rank = 1
+			case isCousub && active:
+				rank = 3
+			case status == "S":
+				rank = 4
+			default:
+				rank = 5
+			}
+			name := baseName(full)
+			put(st, name, rank, lat, lon)
+			// Consolidated governments go by their city's name:
+			// "Louisville/Jefferson County metro government (balance)",
+			// "Nashville-Davidson metropolitan government (balance)".
+			if status == "F" {
+				for _, sep := range []string{"/", "-"} {
+					if i := strings.Index(name, sep); i > 0 {
+						put(st, name[:i], rank, lat, lon)
+					}
+				}
+			}
+			// "Urban Honolulu CDP", "Boise City city".
+			if n, ok := strings.CutPrefix(name, "Urban "); ok {
+				put(st, n, rank, lat, lon)
+			}
+			if n, ok := strings.CutSuffix(name, " City"); ok {
+				put(st, n, rank+1, lat, lon)
+			}
+		}
+		if err := sc.Err(); err != nil {
+			log.Fatal(err)
+		}
+		f.Close()
+	}
+	keys := make([]string, 0, len(best))
+	for k := range best {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	fh, err := os.Create(out)
+	if err != nil {
+		log.Fatal(err)
+	}
+	zw, _ := gzip.NewWriterLevel(fh, gzip.BestCompression)
+	zw.ModTime = time.Time{} // reproducible output
+	w := bufio.NewWriter(zw)
+	for _, k := range keys {
+		p := best[k]
+		fmt.Fprintf(w, "%s\t%s\t%s\n", k, p.lat, p.lon)
+	}
+	if err := w.Flush(); err != nil {
+		log.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		log.Fatal(err)
+	}
+	if err := fh.Close(); err != nil {
+		log.Fatal(err)
+	}
+	st, _ := os.Stat(out)
+	fmt.Printf("wrote %s (%d places, %d bytes)\n", out, len(keys), st.Size())
+}
+
+// baseName strips Census's legal/statistical description from a place or
+// county subdivision name: "Auburn town" -> "Auburn", "Indianapolis city
+// (balance)" -> "Indianapolis", "Abanda CDP" -> "Abanda".
+func baseName(full string) string {
+	w := strings.Fields(full)
+	for len(w) > 1 {
+		last := w[len(w)-1]
+		if last == "CDP" || last == "CCD" || last == "UT" || last == "(balance)" || last == strings.ToLower(last) {
+			w = w[:len(w)-1]
+			continue
+		}
+		break
+	}
+	return strings.Join(w, " ")
+}
+
+// trim keeps three decimals (about 100 m).
+func trim(s string) string {
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return s
+	}
+	return strconv.FormatFloat(f, 'f', 3, 64)
 }

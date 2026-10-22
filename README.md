@@ -166,8 +166,27 @@ The argument is a published folder, relative to the note's folder or the
 published root (empty: the note's own folder). Each state or territory with
 a published subfolder or note there, named like `Massachusetts`,
 `U.S. Virgin Islands` or `MA`, becomes a link; the rest are greyed out.
-The shapes are embedded in the binary (Census Bureau cartographic
-boundaries, public domain); `tools/usmap/build.sh` regenerates them.
+
+A fenced `statemap` block draws one state with a dot for each town in it,
+labelled where there is room, with neighbouring states (linked when they
+have pages) for context:
+
+````markdown
+```statemap
+```
+````
+
+With no argument the state is the note's folder (put it in the state's
+folder note); otherwise name a folder as for `usmap`. Towns are the
+folder's published subfolders and notes, placed by the town page's
+`coordinates: [lat, lon]` frontmatter or else by name from the Census
+gazetteer (New England towns, then incorporated places, counties and
+census-designated places). Towns that can't be placed are reported as
+warnings.
+
+The shapes and place locations are embedded in the binary (Census Bureau
+cartographic boundaries and gazetteer, public domain);
+`tools/usmap/build.sh` regenerates them.
 
 ### YouTube embeds
 

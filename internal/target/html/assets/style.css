@@ -170,3 +170,15 @@ details.transcript[open] > summary { border-bottom: 1px solid var(--border); bor
 .usmap text { font-size: 11px; text-anchor: middle; dominant-baseline: central; fill: var(--muted); pointer-events: none; }
 .usmap a text { fill: var(--fg); }
 .usmap a .sq + text { fill: var(--bg); font-weight: 600; }
+
+/* statemap block: a state with a dot per town */
+.statemap { margin: 1.5rem 0; }
+.statemap svg { display: block; width: 100%; height: auto; max-height: 34rem; }
+.statemap path { stroke: var(--bg); stroke-width: 1.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.statemap .st { fill: color-mix(in srgb, var(--accent) 22%, var(--bg)); stroke: var(--muted); }
+.statemap .nb { fill: var(--bg-alt); stroke: var(--border); }
+.statemap a:hover .nb, .statemap a:focus-visible .nb { fill: var(--border); }
+.statemap circle { fill: var(--accent); stroke: var(--bg); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.statemap text { fill: var(--fg); dominant-baseline: central; paint-order: stroke; stroke: var(--bg); stroke-width: 3; stroke-linejoin: round; vector-effect: non-scaling-stroke; pointer-events: none; }
+.statemap a:hover circle, .statemap a:focus-visible circle { fill: color-mix(in srgb, var(--accent) 65%, var(--fg)); }
+.statemap a:hover text, .statemap a:focus-visible text { fill: var(--link); text-decoration: underline; }
