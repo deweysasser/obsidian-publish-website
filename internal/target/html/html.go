@@ -35,6 +35,7 @@ type Target struct {
 	scheme urls.Basic
 	tmpl   *template.Template
 	out    string
+	origin string // scheme://host of base_url, "" when it is not absolute
 	nav    *nav
 	// Warn receives non-fatal problems.
 	Warn func(string)
@@ -44,6 +45,9 @@ type Target struct {
 func New(cfg *config.Config) (*Target, error) {
 	base := urls.BasePathOf(cfg.Site.BaseURL)
 	t := &Target{cfg: cfg, base: base, scheme: urls.HTML(base), out: cfg.Output, Warn: func(string) {}}
+	if u, err := url.Parse(cfg.Site.BaseURL); err == nil && u.Scheme != "" && u.Host != "" {
+		t.origin = u.Scheme + "://" + u.Host
+	}
 	tmpl, err := template.ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, err
@@ -66,19 +70,28 @@ type tagLink struct{ Name, URL string }
 
 type view struct {
 	SiteTitle, Base, Title string
-	Content                template.HTML
-	Nav                    template.HTML
-	TOC                    []render.TOCEntry
-	Backlinks              []resolve.Result
-	Crumbs                 []crumb
-	Tags                   []tagLink
-	Modified               string
-	Search, Math, Mermaid  bool
-	Indexed                bool
+	// page metadata for search engines and link previews
+	Description, Canonical, Image, Favicon string
+	Content                                template.HTML
+	Nav                                    template.HTML
+	TOC                                    []render.TOCEntry
+	Backlinks                              []resolve.Result
+	Crumbs                                 []crumb
+	Tags                                   []tagLink
+	Modified                               string
+	Search, Math, Mermaid                  bool
+	Indexed                                bool
 }
 
 func (t *Target) write(s *target.Site, slug string, v view, current string) error {
 	v.SiteTitle, v.Base, v.Search = s.Config.Site.Title, t.base, s.Config.Search == "pagefind"
+	if t.origin != "" && current != "" {
+		v.Canonical = t.origin + current
+	}
+	v.Favicon = t.base + "assets/favicon.svg"
+	if f := s.Config.Site.Favicon; f != "" {
+		v.Favicon = t.base + faviconName(f)
+	}
 	if t.nav == nil || t.nav.root != s.Tree {
 		t.nav = newNav(s.Tree)
 	}
@@ -110,7 +123,7 @@ func (t *Target) WritePage(s *target.Site, p *render.Page) error {
 		return fmt.Errorf("%s: its URL /%s/ is reserved for generated pages in the html target; rename the note or folder", p.SourcePath, top)
 	}
 	v := view{Title: p.Title, Content: template.HTML(p.HTML), TOC: tocWithout(p.TOC), Backlinks: p.Backlinks,
-		Crumbs: crumbs(s, p.SourcePath, p.Slug), Indexed: true}
+		Crumbs: crumbs(s, p.SourcePath, p.Slug), Indexed: true, Description: describe(p), Image: shareImage(p.HTML)}
 	if !p.Mtime.IsZero() {
 		v.Modified = p.Mtime.Format("2006-01-02")
 	}
@@ -160,6 +173,11 @@ func (t *Target) Finalize(s *target.Site) error {
 	if err := target.WriteFile(t.out, ".nojekyll", nil); err != nil {
 		return err
 	}
+	if f := s.Config.Site.Favicon; f != "" {
+		if err := target.CopyFile(filepath.Join(s.Config.Vault, f), t.out, faviconName(f)); err != nil {
+			return fmt.Errorf("site.favicon: %w", err)
+		}
+	}
 	if err := fs.WalkDir(assetFS, "assets", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
@@ -174,6 +192,9 @@ func (t *Target) Finalize(s *target.Site) error {
 	}
 	return t.writeSitemap(s)
 }
+
+// faviconName is where a configured favicon is published.
+func faviconName(src string) string { return "favicon" + strings.ToLower(path.Ext(src)) }
 
 // writeRobots points crawlers at the sitemap (which needs an absolute base_url).
 func (t *Target) writeRobots(origin string) error {

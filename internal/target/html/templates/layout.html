@@ -4,7 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{if and .Title (ne .Title .SiteTitle)}}{{.Title}} · {{end}}{{.SiteTitle}}</title>
-<link rel="icon" href="data:,">
+{{- if .Description}}
+<meta name="description" content="{{.Description}}">
+{{- end}}
+{{- if .Canonical}}
+<link rel="canonical" href="{{.Canonical}}">
+{{- end}}
+<meta property="og:title" content="{{.Title}}">
+<meta property="og:site_name" content="{{.SiteTitle}}">
+<meta property="og:type" content="website">
+{{- if .Description}}
+<meta property="og:description" content="{{.Description}}">
+{{- end}}
+{{- if .Canonical}}
+<meta property="og:url" content="{{.Canonical}}">
+{{- end}}
+{{- if .Image}}
+<meta property="og:image" content="{{.Image}}">
+<meta name="twitter:card" content="summary_large_image">
+{{- else}}
+<meta name="twitter:card" content="summary">
+{{- end}}
+<link rel="icon" href="{{.Favicon}}">
 <link rel="stylesheet" href="{{.Base}}assets/style.css">
 {{- if .Search}}
 <link rel="stylesheet" href="{{.Base}}pagefind/pagefind-ui.css">

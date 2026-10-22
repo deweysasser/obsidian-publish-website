@@ -18,6 +18,9 @@ type Site struct {
 	Title   string `yaml:"title"`
 	BaseURL string `yaml:"base_url"`
 	Home    string `yaml:"home"`
+	// Favicon is an image in the vault (path relative to the vault root);
+	// a generic icon is used when empty.
+	Favicon string `yaml:"favicon"`
 }
 
 type Hugo struct {
