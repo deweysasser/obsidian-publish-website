@@ -395,12 +395,15 @@ func writePlaces(files []string, out string) {
 					}
 				}
 			}
-			// "Urban Honolulu CDP", "Boise City city".
+			// "Urban Honolulu CDP".
 			if n, ok := strings.CutPrefix(name, "Urban "); ok {
 				put(st, n, rank, lat, lon)
 			}
-			if n, ok := strings.CutSuffix(name, " City"); ok {
-				put(st, n, rank+1, lat, lon)
+			// "Boise City city", "Southbridge Town city".
+			for _, suffix := range []string{" City", " Town"} {
+				if n, ok := strings.CutSuffix(name, suffix); ok {
+					put(st, n, rank+1, lat, lon)
+				}
 			}
 		}
 		if err := sc.Err(); err != nil {

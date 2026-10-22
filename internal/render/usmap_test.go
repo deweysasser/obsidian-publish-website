@@ -155,3 +155,19 @@ func mustFloat(s string) float64 {
 	f, _ := strconv.ParseFloat(s, 64)
 	return f
 }
+
+func TestUSMapShowsTownDots(t *testing.T) {
+	r, _ := stateMapRenderer(t)
+	out := pre(t, r, "```usmap\nUS\n```\n")
+	g := regexp.MustCompile(`<g class="towns" aria-hidden="true">(.*?)</g>`).FindStringSubmatch(out)
+	if g == nil {
+		t.Fatalf("no town layer:\n%.300s", out[len(out)-600:])
+	}
+	// Boston, Worcester, Smallville (override), Providence; Atlantis can't be placed.
+	if n := strings.Count(g[1], "<circle "); n != 4 {
+		t.Errorf("%d town dots, want 4", n)
+	}
+	if strings.Contains(g[1], "<a ") || strings.Contains(g[1], "<title>") {
+		t.Error("town dots should be decoration only")
+	}
+}

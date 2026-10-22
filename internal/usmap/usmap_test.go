@@ -49,3 +49,23 @@ func TestFindByNameCodeOrAlias(t *testing.T) {
 		t.Errorf("%d regions", len(m.Regions))
 	}
 }
+
+func TestLocateTownCitiesAndIslandAreas(t *testing.T) {
+	m := Load()
+	for _, c := range []struct{ state, town string }{
+		{"MA", "Southbridge"}, // "Southbridge Town city"
+		{"AS", "Pago Pago"}, {"AS", "Tafuna"}, {"GU", "Dededo"}, {"GU", "Hagåtña"}, {"GU", "Hagatna"},
+		{"MP", "Saipan"}, {"VI", "Charlotte Amalie"}, {"VI", "Christiansted"},
+	} {
+		lat, lon, ok := Locate(c.state, c.town)
+		if !ok {
+			t.Errorf("%s, %s: not found", c.town, c.state)
+			continue
+		}
+		r := m.Find(c.state)
+		x, y := r.Proj.Point(lon, lat)
+		if b := r.BBox; x < b[0]-1 || x > b[2]+1 || y < b[1]-1 || y > b[3]+1 {
+			t.Errorf("%s, %s at (%.1f, %.1f) is outside %v", c.town, c.state, x, y, b)
+		}
+	}
+}

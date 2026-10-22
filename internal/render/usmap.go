@@ -40,8 +40,35 @@ func (r *Renderer) usmapBlock(code string, line int, ctx Context) (string, error
 		}
 		b.WriteString(end + "\n")
 	}
+	b.WriteString(r.townDots(m, targets))
 	b.WriteString("</svg></figure>\n")
 	return "\n" + b.String(), nil
+}
+
+// townDots draws a dot for each placeable town in each linked state's
+// folder, as decoration: the state underneath stays the link.
+func (r *Renderer) townDots(m *usmap.Map, targets map[string]child) string {
+	var b strings.Builder
+	for i := range m.Regions {
+		reg := &m.Regions[i]
+		for _, n := range reg.Names() {
+			st, ok := targets[strings.ToLower(n)]
+			if !ok {
+				continue
+			}
+			for _, town := range r.children(st.folder) {
+				if lat, lon, ok := r.townLocation(town, reg.Code); ok {
+					x, y := reg.Proj.Point(lon, lat)
+					b.WriteString(`<circle cx="` + num1(x) + `" cy="` + num1(y) + `" r="2"/>`)
+				}
+			}
+			break
+		}
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return `<g class="towns" aria-hidden="true">` + b.String() + "</g>\n"
 }
 
 // regionLink opens a region's element: a link to its page if it has one,
@@ -187,6 +214,7 @@ func (r *Renderer) townLocation(c child, state string) (lat, lon float64, ok boo
 type child struct {
 	name, url string
 	note      string // its page's note (the folder note for a folder), if any
+	folder    string // its vault path, if it is a folder
 }
 
 // children maps the lower-cased names of a published folder's subfolders
@@ -198,14 +226,14 @@ func (r *Renderer) children(folder string) map[string]child {
 	}
 	for f, slug := range r.Pub.Folders {
 		if path.Dir(f) == folder && f != folder {
-			out[strings.ToLower(path.Base(f))] = child{path.Base(f), r.URLs.PageURL(slug), r.Pub.FolderNote(f)}
+			out[strings.ToLower(path.Base(f))] = child{path.Base(f), r.URLs.PageURL(slug), r.Pub.FolderNote(f), f}
 		}
 	}
 	for p, slug := range r.Pub.Pages {
 		if path.Dir(p) == folder && slug != "" && r.Pub.FolderNote(folder) != p {
 			name := strings.TrimSuffix(path.Base(p), path.Ext(p))
 			if _, isFolder := out[strings.ToLower(name)]; !isFolder {
-				out[strings.ToLower(name)] = child{name, r.URLs.PageURL(slug), p}
+				out[strings.ToLower(name)] = child{name, r.URLs.PageURL(slug), p, ""}
 			}
 		}
 	}

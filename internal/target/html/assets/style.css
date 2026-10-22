@@ -182,3 +182,4 @@ details.transcript[open] > summary { border-bottom: 1px solid var(--border); bor
 .statemap text { fill: var(--fg); dominant-baseline: central; paint-order: stroke; stroke: var(--bg); stroke-width: 3; stroke-linejoin: round; vector-effect: non-scaling-stroke; pointer-events: none; }
 .statemap a:hover circle, .statemap a:focus-visible circle { fill: color-mix(in srgb, var(--accent) 65%, var(--fg)); }
 .statemap a:hover text, .statemap a:focus-visible text { fill: var(--link); text-decoration: underline; }
+.usmap .towns circle { fill: var(--bg); stroke: var(--fg); stroke-width: .6; pointer-events: none; }
