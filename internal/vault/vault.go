@@ -38,7 +38,8 @@ type Vault struct {
 }
 
 // Load walks root, reading all .md notes and listing all other files.
-// Directories and files whose names start with "." are skipped.
+// Directories and files whose names start with "." are skipped, as are
+// Syncthing conflict copies (name.sync-conflict-<date>-<time>-<device>.ext).
 func Load(root string) (*Vault, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
@@ -58,7 +59,7 @@ func Load(root string) (*Vault, error) {
 			}
 			return nil
 		}
-		if d.IsDir() {
+		if d.IsDir() || strings.Contains(d.Name(), ".sync-conflict-") {
 			return nil
 		}
 		rel, err := filepath.Rel(abs, p)

@@ -110,3 +110,17 @@ func TestSymlinksSkipped(t *testing.T) {
 		t.Errorf("warnings %v", v.Warnings)
 	}
 }
+
+func TestSyncConflictsSkipped(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "Town.md"), []byte("ok"), 0o644)
+	os.WriteFile(filepath.Join(dir, "Town.sync-conflict-20260101-120000-ABCDEFG.md"), []byte("old"), 0o644)
+	os.WriteFile(filepath.Join(dir, "map.sync-conflict-20260101-120000-ABCDEFG.png"), []byte("old"), 0o644)
+	v, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Notes) != 1 || v.Notes[0].Path != "Town.md" || len(v.Attachments) != 0 || len(v.Warnings) != 0 {
+		t.Errorf("notes %d attachments %v warnings %v", len(v.Notes), v.Attachments, v.Warnings)
+	}
+}

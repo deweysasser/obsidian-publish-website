@@ -40,6 +40,9 @@ obsidian-publish-website build -c publish.yaml [--target html|hugo|jekyll] [-o D
 they are empty or were created by this tool (they contain a
 `.obsidian-publish` marker).
 
+Files and folders whose names start with `.`, and Syncthing conflict copies
+(`*.sync-conflict-*`), are never read from the vault.
+
 ### publish.yaml
 
 ```yaml
