@@ -28,7 +28,11 @@ var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __commonJS = (cb, mod) => function __require() {
-  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  try {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  } catch (e) {
+    throw mod = 0, e;
+  }
 };
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
@@ -1364,7 +1368,7 @@ var require_papaparse = __commonJS({
       }
     })(exports2, function moduleFactory() {
       "use strict";
-      var global = function() {
+      var global = (function() {
         if (typeof self !== "undefined") {
           return self;
         }
@@ -1375,7 +1379,7 @@ var require_papaparse = __commonJS({
           return global;
         }
         return {};
-      }();
+      })();
       function getWorkerBlob() {
         var URL = global.URL || global.webkitURL || null;
         var code = moduleFactory.toString();
@@ -5322,7 +5326,7 @@ var Duration = class _Duration {
    * Returns a string representation of this Duration appropriate for the REPL.
    * @return {string}
    */
-  [Symbol.for("nodejs.util.inspect.custom")]() {
+  [/* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")]() {
     if (this.isValid) {
       return `Duration { values: ${JSON.stringify(this.values)} }`;
     } else {
@@ -6077,7 +6081,7 @@ var Interval = class _Interval {
    * Returns a string representation of this Interval appropriate for the REPL.
    * @return {string}
    */
-  [Symbol.for("nodejs.util.inspect.custom")]() {
+  [/* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")]() {
     if (this.isValid) {
       return `Interval { start: ${this.s.toISO()}, end: ${this.e.toISO()} }`;
     } else {
@@ -8414,7 +8418,7 @@ var DateTime = class _DateTime {
    * Returns a string representation of this DateTime appropriate for the REPL.
    * @return {string}
    */
-  [Symbol.for("nodejs.util.inspect.custom")]() {
+  [/* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")]() {
     if (this.isValid) {
       return `DateTime { ts: ${this.toISO()}, zone: ${this.zone.name}, locale: ${this.locale} }`;
     } else {
@@ -8870,6 +8874,7 @@ var Success = class _Success {
     this.value = value;
     this.successful = true;
   }
+  value;
   successful;
   map(f) {
     return new _Success(f(this.value));
@@ -8898,6 +8903,7 @@ var Failure = class _Failure {
     this.error = error;
     this.successful = false;
   }
+  error;
   successful;
   map(_f) {
     return this;
@@ -9431,6 +9437,7 @@ var Widget = class {
   constructor($widget) {
     this.$widget = $widget;
   }
+  $widget;
 };
 var ListPairWidget = class extends Widget {
   constructor(key, value) {
@@ -9438,6 +9445,8 @@ var ListPairWidget = class extends Widget {
     this.key = key;
     this.value = value;
   }
+  key;
+  value;
   markdown() {
     return `${Values.toString(this.key)}: ${Values.toString(this.value)}`;
   }
@@ -9448,6 +9457,8 @@ var ExternalLinkWidget = class extends Widget {
     this.url = url;
     this.display = display;
   }
+  url;
+  display;
   markdown() {
     return `[${this.display ?? this.url}](${this.url})`;
   }
@@ -10740,6 +10751,9 @@ var TAbstractFile = class {
     this.name = name;
     this.parent = parent;
   }
+  path;
+  name;
+  parent;
 };
 var TFile = class extends TAbstractFile {
   basename;
@@ -10767,6 +10781,8 @@ var PrefixIndex = class _PrefixIndex extends Component {
     this.vault = vault;
     this.updateRevision = updateRevision;
   }
+  vault;
+  updateRevision;
   static create(vault, updateRevision) {
     return new _PrefixIndex(vault, updateRevision);
   }
@@ -10831,6 +10847,7 @@ var CsvCache = class _CsvCache extends Component {
       })
     );
   }
+  vault;
   static CACHE_EXPIRY_SECONDS = 5 * 60;
   // Cache of loaded CSVs; old entries will periodically be removed
   cache;
@@ -10889,6 +10906,8 @@ var StarredCache = class _StarredCache extends Component {
     const initialHandler = window.setTimeout(() => this.reload(), _StarredCache.INITIAL_DELAY);
     this.register(() => window.clearTimeout(initialHandler));
   }
+  app;
+  onUpdate;
   /** Initial delay before checking the cache; we need to wait for it to asynchronously load the initial stars. */
   static INITIAL_DELAY = 4 * 1e3;
   /** How frequently to check for star updates. */
@@ -10997,6 +11016,7 @@ var ValueCaseInsensitiveIndexMap = class {
   constructor(delegate = new IndexMap()) {
     this.delegate = delegate;
   }
+  delegate;
   /** Returns all values for the given key. */
   get(key) {
     return this.delegate.get(key);
@@ -11244,6 +11264,9 @@ var DataArrayImpl = class _DataArrayImpl {
     this.defaultComparator = defaultComparator;
     this.length = values.length;
   }
+  values;
+  settings;
+  defaultComparator;
   static ARRAY_FUNCTIONS = /* @__PURE__ */ new Set([
     "where",
     "filter",
@@ -11552,6 +11575,7 @@ var FunctionBuilder = class {
     this.variants = [];
     this.vectorized = {};
   }
+  name;
   variants;
   vectorized;
   /** Add a general function variant which accepts any number of arguments of any type. */
@@ -12010,6 +12034,11 @@ var Context = class {
     this.binaryOps = binaryOps;
     this.functions = functions;
   }
+  linkHandler;
+  settings;
+  globals;
+  binaryOps;
+  functions;
   /** Set a global value in this context. */
   set(name, value) {
     this.globals[name] = value;

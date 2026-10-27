@@ -2,8 +2,8 @@
 # Vendors KaTeX and Mermaid into the html target's embedded assets so
 # published sites need no CDN. Re-run to upgrade (edit versions below).
 set -euo pipefail
-KATEX=0.16.11
-MERMAID=11.4.1
+KATEX=0.19.0
+MERMAID=12.1.0
 DEST="$(cd "$(dirname "$0")/.." && pwd)/internal/target/html/assets/vendor"
 CDN=https://cdn.jsdelivr.net/npm
 rm -rf "$DEST" && mkdir -p "$DEST/katex/fonts" "$DEST/mermaid"

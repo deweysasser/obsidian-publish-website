@@ -2,10 +2,12 @@
   "name": "obsidian-publish-dataview-bridge",
   "private": true,
   "description": "Bundles Dataview's page parser and query engine for obsidian-publish-website",
-  "scripts": { "build": "node build.mjs" },
+  "scripts": {
+    "build": "node build.mjs"
+  },
   "devDependencies": {
-    "esbuild": "0.24.2",
     "emoji-regex": "10.3.0",
+    "esbuild": "0.28.2",
     "luxon": "3.4.4",
     "papaparse": "5.4.1",
     "parsimmon": "1.18.1",

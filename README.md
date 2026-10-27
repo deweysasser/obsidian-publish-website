@@ -39,7 +39,7 @@ For a real deployment set `base_url` to the final URL (see
 ## Install
 
 ```bash
-go install github.com/deweysasser/obsidian-publish-website@latest   # Go ≥ 1.26
+go install github.com/deweysasser/obsidian-publish-website@latest   # Go ≥ 1.27
 ```
 
 or download a prebuilt binary (Linux, macOS, Windows) from the
