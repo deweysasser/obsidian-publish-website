@@ -59,13 +59,36 @@ func TestPreprocessSkipsCode(t *testing.T) {
 func TestPreprocessMath(t *testing.T) {
 	r, _ := fixtureRenderer(t)
 	got := pre(t, r, "e $x<1$ f\n$$\na<b\n$$\n")
-	want := "e <span class=\"math\">\\(x&lt;1\\)</span> f\n<div class=\"math\">\\[\na&lt;b\n\\]</div>\n"
+	want := "e <span class=\"math\">\\\\\\(x&lt;1\\\\\\)</span> f\n<div class=\"math\">\\[\na&lt;b\n\\]</div>\n"
 	if got != want {
 		t.Errorf("got %q\nwant %q", got, want)
 	}
 	r, _ = newTestRenderer(t, "../../testdata/fixture-vault", ModeMarkdown)
 	if got := pre(t, r, "e $x<1$ f"); got != "e $x<1$ f" {
 		t.Errorf("markdown mode math %q", got)
+	}
+}
+
+// Math source must reach KaTeX verbatim: goldmark must not eat its
+// backslash escapes or read _ and * as emphasis.
+func TestMathSurvivesMarkdown(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "Town/a.md", "e $e^{i\\pi}+1=0$ and $a_1 * b_2 * c_3$ and $x\\,y<1$ and $$\\int x\\,dx$$ f\n\n$$\na_1*b_2*\\{c\\}\n$$\n")
+	r, _ := newTestRenderer(t, dir, ModeHTML)
+	p, err := renderFull(r, "Town/a.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`<span class="math">\(e^{i\pi}+1=0\)</span>`,
+		`<span class="math">\(a_1 * b_2 * c_3\)</span>`,
+		`<span class="math">\(x\,y&lt;1\)</span>`,
+		`<span class="math display">\[\int x\,dx\]</span>`,
+		"<div class=\"math\">\\[\na_1*b_2*\\{c\\}\n\\]</div>",
+	} {
+		if !strings.Contains(p.HTML, want) {
+			t.Errorf("missing %q in\n%s", want, p.HTML)
+		}
 	}
 }
 

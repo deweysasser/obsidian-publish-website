@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/deweysasser/obsidian-publish-website/internal/index"
 	"github.com/deweysasser/obsidian-publish-website/internal/mdscan"
@@ -124,9 +125,29 @@ func (r *Renderer) math(src string) string {
 		return src
 	}
 	if strings.HasPrefix(src, "$$") {
-		return `<span class="math display">\[` + html.EscapeString(src[2:len(src)-2]) + `\]</span>`
+		return `<span class="math display">` + inlineMathText(`\[`+src[2:len(src)-2]+`\]`) + `</span>`
 	}
-	return `<span class="math">\(` + html.EscapeString(src[1:len(src)-1]) + `\)</span>`
+	return `<span class="math">` + inlineMathText(`\(`+src[1:len(src)-1]+`\)`) + `</span>`
+}
+
+// inlineMathText escapes math for an inline position, where goldmark still
+// parses the text as markdown: HTML specials become entities and every
+// other ASCII punctuation character gets a backslash, so goldmark drops the
+// backslashes and KaTeX sees the source unchanged.
+func inlineMathText(src string) string {
+	var b strings.Builder
+	for _, c := range src {
+		switch {
+		case c == '<' || c == '>' || c == '&' || c == '"':
+			b.WriteString(html.EscapeString(string(c)))
+		case c < 0x80 && unicode.IsPunct(c) || c < 0x80 && unicode.IsSymbol(c):
+			b.WriteByte('\\')
+			b.WriteRune(c)
+		default:
+			b.WriteRune(c)
+		}
+	}
+	return b.String()
 }
 
 // inlineCode handles inline code spans; dataview inline queries hook in here.
