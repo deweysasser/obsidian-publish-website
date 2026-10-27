@@ -103,8 +103,12 @@ type Config struct {
 	Strict bool `yaml:"-"`
 }
 
+// RunnerEnv, when set, overrides tools.runner. The published container
+// image sets it to "host", since it carries pagefind and wrangler itself.
+const RunnerEnv = "OBSIDIAN_PUBLISH_TOOLS_RUNNER"
+
 // Load reads a config file, expands paths relative to the file's directory,
-// applies defaults and validates.
+// applies defaults (and $OBSIDIAN_PUBLISH_TOOLS_RUNNER) and validates.
 func Load(file string) (*Config, error) {
 	f, err := os.Open(file)
 	if err != nil {
@@ -125,6 +129,9 @@ func Load(file string) (*Config, error) {
 	c.Vault = expandPath(c.Vault, dir)
 	c.HTML.TemplateDir = expandPath(c.HTML.TemplateDir, dir)
 	c.ApplyDefaults()
+	if v := os.Getenv(RunnerEnv); v != "" {
+		c.Tools.Runner = v
+	}
 	c.Output = expandPath(c.Output, dir)
 	if err := c.Validate(); err != nil {
 		return nil, fmt.Errorf("%s: %w", file, err)

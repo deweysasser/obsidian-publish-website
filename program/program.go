@@ -51,6 +51,7 @@ type PublishCmd struct {
 type BuildCmd struct {
 	Config string `short:"c" default:"publish.yaml" help:"Path to the publish config file"`
 	Target string `enum:",html,hugo,jekyll" default:"" help:"Override the config's target (html|hugo|jekyll)"`
+	Vault  string `help:"Override the config's vault directory (e.g. where it is mounted in a container)"`
 	Output string `short:"o" help:"Override the config's output directory"`
 	Strict bool   `help:"Treat warnings (query errors, broken links, unsupported dataviewjs) as errors"`
 }
@@ -84,6 +85,11 @@ func (cmd *BuildCmd) load() (*config.Config, error) {
 	cfg, err := loadConfig(cmd.Config, cmd.Output)
 	if err != nil {
 		return nil, err
+	}
+	if cmd.Vault != "" {
+		if cfg.Vault, err = filepath.Abs(cmd.Vault); err != nil {
+			return nil, err
+		}
 	}
 	if cmd.Target != "" {
 		cfg.Target = cmd.Target

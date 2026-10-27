@@ -133,3 +133,24 @@ func TestFailureIncludesOutput(t *testing.T) {
 		t.Errorf("err %v", err)
 	}
 }
+
+// The published image (../../Dockerfile) runs the same tools in host mode;
+// its Node, wrangler and pagefind must match the embedded tools image.
+func TestPublishedImagePinsMatchToolsImage(t *testing.T) {
+	pins := func(dockerfile string) []string {
+		var l []string
+		for _, ln := range strings.Split(dockerfile, "\n") {
+			for _, f := range strings.Fields(ln) {
+				if strings.HasPrefix(f, "node:") || strings.HasPrefix(f, "wrangler@") || strings.HasPrefix(f, "pagefind@") {
+					l = append(l, f)
+				}
+			}
+		}
+		return l
+	}
+	want := pins(string(dockerfile))
+	got := pins(read(t, "../../Dockerfile"))
+	if len(want) != 3 || strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("Dockerfile pins %v, internal/tools/Dockerfile pins %v", got, want)
+	}
+}

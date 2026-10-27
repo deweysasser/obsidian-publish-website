@@ -111,6 +111,7 @@ func TestValidateSectionAndCollection(t *testing.T) {
 }
 
 func TestToolsAndDeployDefaults(t *testing.T) {
+	t.Setenv(RunnerEnv, "")
 	c, err := Load(writeConfig(t, "vault: /v\nroot: R\ndeploy:\n  cloudflare_pages:\n    project: p\n"))
 	if err != nil {
 		t.Fatal(err)
@@ -125,7 +126,23 @@ func TestToolsAndDeployDefaults(t *testing.T) {
 	}
 }
 
+func TestRunnerEnvOverridesConfig(t *testing.T) {
+	t.Setenv(RunnerEnv, "host")
+	c, err := Load(writeConfig(t, "vault: /v\nroot: R\ntools: {runner: docker}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Tools.Runner != "host" {
+		t.Errorf("runner %q, want host from $%s", c.Tools.Runner, RunnerEnv)
+	}
+	t.Setenv(RunnerEnv, "podman")
+	if _, err := Load(writeConfig(t, "vault: /v\nroot: R\n")); err == nil || !strings.Contains(err.Error(), "tools.runner") {
+		t.Errorf("bad $%s value: err %v", RunnerEnv, err)
+	}
+}
+
 func TestValidateToolsAndDeploy(t *testing.T) {
+	t.Setenv(RunnerEnv, "")
 	for body, want := range map[string]string{
 		"tools: {runner: podman}\n":                                                        "tools.runner",
 		"deploy: {cloudflare_pages: {}}\n":                                                 "deploy.cloudflare_pages.project",

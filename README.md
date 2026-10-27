@@ -44,19 +44,43 @@ go install github.com/deweysasser/obsidian-publish-website@latest   # Go ≥ 1.2
 
 or download a prebuilt binary (Linux, macOS, Windows) from the
 [Releases](https://github.com/deweysasser/obsidian-publish-website/releases)
-page.
+page, or use the [container image](#container), which needs nothing else
+installed.
 
-Runtime requirements:
+Runtime requirements for the binary (the [container](#container) has them all):
 
 | Needed for | Requirement |
 |---|---|
 | Dataview queries | Node.js ≥ 18 on `PATH` (or `dataview: none`) |
 | Search (html target), deploy | Docker (or `tools.runner: host` with Pagefind / wrangler on `PATH`; or `search: none`) |
 
+## Container
+
+`ghcr.io/deweysasser/obsidian-publish-website` (`:latest`, `:<version>`,
+`:main`) bundles everything the program uses: Node for Dataview, Pagefind
+and wrangler. Inside it, tools run directly; it never starts another
+container. Mount the vault (read-only is fine) and a working directory
+holding `publish.yaml`; the site is written relative to the config, so it
+lands in that directory:
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" \
+  -v ~/Documents/MyVault:/vault:ro -v "$PWD":/work \
+  -e CLOUDFLARE_API_TOKEN -e CLOUDFLARE_ACCOUNT_ID \
+  ghcr.io/deweysasser/obsidian-publish-website publish --vault /vault
+```
+
+`--vault` overrides the config's `vault:` so the same `publish.yaml` works
+on the host and in the container. Use `build` instead of `publish` to only
+build. The image has no 1Password CLI, so give credentials as `env:`
+references; to keep them in 1Password, wrap the command:
+`op run --env-file=cf.env -- docker run ...` with `cf.env` mapping
+`CLOUDFLARE_API_TOKEN=op://...`.
+
 ## Usage
 
 ```bash
-obsidian-publish-website build -c publish.yaml [--target html|hugo|jekyll] [-o DIR] [--strict]
+obsidian-publish-website build -c publish.yaml [--target html|hugo|jekyll] [-o DIR] [--vault DIR] [--strict]
 ```
 
 `-c` defaults to `./publish.yaml`; `build` is the default command.
@@ -280,6 +304,9 @@ tools:
   runner: docker   # default; or "host" to use pagefind/wrangler from PATH
   image: ""        # optional: use this pre-built image instead
 ```
+
+`OBSIDIAN_PUBLISH_TOOLS_RUNNER=docker|host` overrides `tools.runner`; the
+container image sets it to `host`.
 
 ## Development
 

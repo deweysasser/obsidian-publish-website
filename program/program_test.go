@@ -45,6 +45,21 @@ func TestParseBuildCommand(t *testing.T) {
 	assert.True(t, program.Build.Strict)
 }
 
+func TestVaultFlagOverridesConfig(t *testing.T) {
+	var program Options
+	_, err := program.Parse([]string{"publish", "--vault", "/vault"})
+	assert.NoError(t, err)
+	assert.Equal(t, "/vault", program.Publish.Vault)
+
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "publish.yaml")
+	os.WriteFile(cfg, []byte("vault: ~/Documents/MyVault\nroot: R\n"), 0o644)
+	c, err := (&BuildCmd{Config: cfg, Vault: "v"}).load()
+	assert.NoError(t, err)
+	wd, _ := os.Getwd()
+	assert.Equal(t, filepath.Join(wd, "v"), c.Vault)
+}
+
 func TestBuildCommandRejectsBadTarget(t *testing.T) {
 	var program Options
 	_, err := program.Parse([]string{"build", "--target", "pdf"})

@@ -49,12 +49,8 @@ install:
 	go install -ldflags="-X '$(REPO)/program.Version=${VERSION}'"
 
 
-image: .Dockerfile.tmp
-	$(DOCKER) build -f $< --build-arg GO_VERSION=$(GO_VERSION) --build-arg PROGRAM=$(BASENAME) --build-arg VERSION=$(VERSION) --build-arg BASENAME=$(BASENAME) -t $(IMAGE) .
-
-.Dockerfile.tmp: Dockerfile
-	sed -e "s|^ENTRYPOINT.*|ENTRYPOINT [\"/${BASENAME}\"]|" < $< > $@.tmp
-	mv -f $@.tmp $@
+image:
+	$(DOCKER) build --build-arg GO_VERSION=$(GO_VERSION) --build-arg PROGRAM=$(BASENAME) --build-arg VERSION=$(VERSION) -t $(IMAGE) .
 
 test:
 	go test -v ./...
