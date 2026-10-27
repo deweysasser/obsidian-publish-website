@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/deweysasser/obsidian-publish-website/internal/timing"
 	"github.com/deweysasser/obsidian-publish-website/internal/tools"
 	"github.com/rs/zerolog"
 )
@@ -17,6 +18,6 @@ func RunPagefind(ctx context.Context, r tools.Runner, siteDir string, log zerolo
 	if err != nil {
 		return err
 	}
-	log.Info().Stringer("elapsed", time.Since(start).Round(time.Millisecond)).Msg("Indexed site search")
+	log.Info().Func(timing.Elapsed(start)).Msg("Indexed site search")
 	return nil
 }

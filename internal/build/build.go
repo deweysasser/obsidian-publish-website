@@ -23,6 +23,7 @@ import (
 	"github.com/deweysasser/obsidian-publish-website/internal/target/html"
 	"github.com/deweysasser/obsidian-publish-website/internal/target/hugo"
 	"github.com/deweysasser/obsidian-publish-website/internal/target/jekyll"
+	"github.com/deweysasser/obsidian-publish-website/internal/timing"
 	"github.com/deweysasser/obsidian-publish-website/internal/tools"
 	"github.com/deweysasser/obsidian-publish-website/internal/transform"
 	"github.com/deweysasser/obsidian-publish-website/internal/vault"
@@ -83,7 +84,7 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Info().Int("notes", len(v.Notes)).Int("published", len(pub.Pages)).Stringer("elapsed", time.Since(start).Round(time.Millisecond)).Msg("Indexed vault")
+	log.Info().Int("notes", len(v.Notes)).Int("published", len(pub.Pages)).Func(timing.Elapsed(start)).Msg("Indexed vault")
 
 	r := render.NewRenderer(ix, pub, tgt.Scheme(), tgt.Mode(), func(p string, line int, msg string) {
 		warn(fmt.Sprintf("%s:%d: %s", p, line, msg))
@@ -159,7 +160,7 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 	}
 	rep.Pages, rep.Assets = len(site.Pages), len(site.Assets)
 	log.Info().Int("pages", rep.Pages).Int("assets", rep.Assets).Int("warnings", len(rep.Warnings)).
-		Str("output", cfg.Output).Stringer("elapsed", time.Since(start).Round(time.Millisecond)).Msg("Site built")
+		Str("output", cfg.Output).Func(timing.Elapsed(start)).Msg("Site built")
 	return rep, nil
 }
 
@@ -203,7 +204,7 @@ func evaluateDataview(cfg *config.Config, r *render.Renderer, ix *index.Index, l
 		return err
 	}
 	r.SetDataview(res, settings)
-	log.Info().Int("queries", len(reqs)).Stringer("elapsed", time.Since(start).Round(time.Millisecond)).Msg("Evaluated dataview queries")
+	log.Info().Int("queries", len(reqs)).Func(timing.Elapsed(start)).Msg("Evaluated dataview queries")
 	return nil
 }
 
@@ -244,7 +245,7 @@ func youtubeEmbeds(ix *index.Index, pub *selector.Published, log zerolog.Logger)
 		if err := c.Save(); err != nil {
 			log.Warn().Err(err).Msg("Could not save YouTube embed cache")
 		}
-		log.Info().Int("videos", len(ids)).Stringer("elapsed", time.Since(start).Round(time.Millisecond)).Msg("Checked YouTube embedding")
+		log.Info().Int("videos", len(ids)).Func(timing.Elapsed(start)).Msg("Checked YouTube embedding")
 	}
 	return c.Embeddable
 }

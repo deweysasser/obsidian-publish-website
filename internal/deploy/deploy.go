@@ -13,6 +13,7 @@ import (
 	"github.com/deweysasser/obsidian-publish-website/internal/config"
 	"github.com/deweysasser/obsidian-publish-website/internal/secret"
 	"github.com/deweysasser/obsidian-publish-website/internal/target"
+	"github.com/deweysasser/obsidian-publish-website/internal/timing"
 	"github.com/deweysasser/obsidian-publish-website/internal/tools"
 	"github.com/rs/zerolog"
 )
@@ -51,6 +52,6 @@ func Run(ctx context.Context, cfg *config.Config, r tools.Runner, log zerolog.Lo
 		return "", err
 	}
 	url := deploymentURLRe.FindString(out)
-	log.Info().Str("url", url).Stringer("elapsed", time.Since(start).Round(time.Millisecond)).Msg("Deployed")
+	log.Info().Str("url", url).Func(timing.Elapsed(start)).Msg("Deployed")
 	return url, nil
 }
