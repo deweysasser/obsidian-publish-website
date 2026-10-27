@@ -170,4 +170,9 @@ func TestUSMapShowsTownDots(t *testing.T) {
 	if strings.Contains(g[1], "<a ") || strings.Contains(g[1], "<title>") {
 		t.Error("town dots should be decoration only")
 	}
+	for i := 0; i < 20; i++ { // map iteration order must not leak into the output
+		if again := pre(t, r, "```usmap\nUS\n```\n"); again != out {
+			t.Fatal("town dots differ between renders")
+		}
+	}
 }

@@ -22,7 +22,12 @@ func (r *Renderer) FolderListing(folder string) string {
 		}
 	}
 	less := func(es []entry) func(i, j int) bool {
-		return func(i, j int) bool { return strings.ToLower(es[i].name) < strings.ToLower(es[j].name) }
+		return func(i, j int) bool {
+			if a, b := strings.ToLower(es[i].name), strings.ToLower(es[j].name); a != b {
+				return a < b
+			}
+			return es[i].name < es[j].name
+		}
 	}
 	sort.Slice(folders, less(folders))
 	sort.Slice(pages, less(pages))
