@@ -4,11 +4,15 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestResolve(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake op is a shell script")
+	}
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "op"), []byte("#!/bin/sh\n[ \"$1\" = read ] && for a; do last=$a; done; [ \"$last\" = op://V/I/f ] && printf 'tok\\n'\n"), 0o755)
 	t.Setenv("PATH", dir)

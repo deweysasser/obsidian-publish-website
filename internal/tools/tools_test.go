@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -18,6 +19,9 @@ func fakeBin(t *testing.T, dir, name, script string) {
 
 func fakePath(t *testing.T) string {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("fake tools are shell scripts")
+	}
 	dir := t.TempDir()
 	t.Setenv("PATH", dir+":/usr/bin:/bin")
 	return dir
