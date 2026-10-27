@@ -16,11 +16,35 @@ evaluated by Dataview itself.
   Pagefind full-text search, KaTeX math and Mermaid diagrams (vendored, no
   CDN), light/dark themes.
 
+## Quick start
+
+```bash
+cat > publish.yaml <<'YAML'
+vault: ~/Documents/MyVault
+root: Town Notes            # folder inside the vault to publish
+exclude: ["**/People/**"]
+site:
+  title: Town Notes
+  base_url: http://localhost:8000/
+YAML
+
+obsidian-publish-website build          # reads ./publish.yaml, writes ./site
+python3 -m http.server -d site 8000     # preview at http://localhost:8000/
+```
+
+For a real deployment set `base_url` to the final URL (see
+[html](#html-default)) and either push `site/` to any static host or use
+[`publish`](#publishing) to deploy to Cloudflare Pages.
+
 ## Install
 
 ```bash
-go install github.com/deweysasser/obsidian-publish-website@latest
+go install github.com/deweysasser/obsidian-publish-website@latest   # Go ≥ 1.26
 ```
+
+or download a prebuilt binary (Linux, macOS, Windows) from the
+[Releases](https://github.com/deweysasser/obsidian-publish-website/releases)
+page.
 
 Runtime requirements:
 
@@ -34,6 +58,8 @@ Runtime requirements:
 ```bash
 obsidian-publish-website build -c publish.yaml [--target html|hugo|jekyll] [-o DIR] [--strict]
 ```
+
+`-c` defaults to `./publish.yaml`; `build` is the default command.
 
 `--strict` turns warnings (broken links, query errors, unsupported
 `dataviewjs`) into a failed build. Output directories are only replaced if
@@ -260,8 +286,16 @@ tools:
 ```bash
 make            # build
 make test       # go test ./...
-OBSIDIAN_PUBLISH_SMOKE_VAULT=~/vault go test ./internal/build -run Smoke -v
 ```
+
+Some tests skip unless their dependencies are available:
+
+| Test | Enable with |
+|---|---|
+| Dataview / hugo / jekyll output | `node` on `PATH` |
+| Pagefind search | `OBSIDIAN_PUBLISH_TOOLS_RUNNER=docker` (or `host`) |
+| Real Hugo / Jekyll site builds | `hugo` / `jekyll` on `PATH` |
+| Smoke test against your own vault | `OBSIDIAN_PUBLISH_SMOKE_VAULT=~/vault` |
 
 - `testdata/fixture-vault` is the end-to-end fixture.
 - `tools/dv-oracle` captures ground truth from a running Obsidian
@@ -270,5 +304,9 @@ OBSIDIAN_PUBLISH_SMOKE_VAULT=~/vault go test ./internal/build -run Smoke -v
 - `tools/vendor.sh` refreshes vendored KaTeX/Mermaid.
 
 Project scaffolding comes from
-[golang-program](https://github.com/deweysasser/golang-program); see
-`README-TEMPLATE.md`.
+[golang-program](https://github.com/deweysasser/golang-program).
+
+## License
+
+MIT; see [LICENSE](LICENSE). The bundled Dataview, KaTeX and Mermaid are
+MIT-licensed; the U.S. map data is public domain (U.S. Census Bureau).
