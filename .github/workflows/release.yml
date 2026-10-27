@@ -122,13 +122,25 @@ jobs:
       - name: Build Image
         run: make image IMAGE=ghcr.io/${{env.REPO}}:${{env.TAG}}
 
-      - name: Tag latest
-        run: docker tag ghcr.io/${{env.REPO}}:${{env.TAG}} ghcr.io/${{env.REPO}}:latest
+      - name: Smoke-test image (Dataview + Pagefind, no network)
+        run: |
+          mkdir -p "$RUNNER_TEMP/work"
+          printf 'vault: /vault\nroot: Town\nsite: {title: T, base_url: "http://localhost/"}\n' > "$RUNNER_TEMP/work/publish.yaml"
+          docker run --rm --network none --user "$(id -u):$(id -g)" \
+            -v "$PWD/testdata/fixture-vault:/vault:ro" -v "$RUNNER_TEMP/work:/work" \
+            ghcr.io/${{env.REPO}}:${{env.TAG}} build --strict
+          test -f "$RUNNER_TEMP/work/site/issues/road-repair/index.html"
+          test -d "$RUNNER_TEMP/work/site/pagefind"
 
       - name: Push
         run: docker push ghcr.io/${{env.REPO}}:${{env.TAG}}
 
+      - name: Tag latest
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: docker tag ghcr.io/${{env.REPO}}:${{env.TAG}} ghcr.io/${{env.REPO}}:latest
+
       - name: Push Latest
+        if: ${{ !contains(github.ref_name, '-') }}
         run: docker push ghcr.io/${{env.REPO}}:latest
 
       - name: Tag stable
