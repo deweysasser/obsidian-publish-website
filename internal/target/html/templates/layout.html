@@ -42,12 +42,14 @@
 </header>
 <div class="layout">
   <nav id="site-nav" class="site-nav" data-pagefind-ignore="all">
-    {{.Nav}}
-    {{- if .HasTags}}
+    {{- if or .HasTags .About .Support}}
     <ul class="nav-extra">
-      <li><a href="{{.Base}}tags/">Tags</a></li>
+      {{- if .HasTags}}<li><a href="{{.Base}}tags/">Tags</a></li>{{end}}
+      {{- with .About}}<li><a href="{{.URL}}">{{.Name}}</a></li>{{end}}
+      {{- with .Support}}<li><a href="{{.URL}}">{{.Name}}</a></li>{{end}}
     </ul>
     {{- end}}
+    {{.Nav}}
   </nav>
   <main class="content">
     {{- if .Crumbs}}
@@ -71,6 +73,12 @@
       </section>
       {{- end}}
       {{- if .Modified}}<p class="modified">Last modified {{.Modified}}</p>{{end}}
+    </footer>
+    {{- end}}
+    {{- if or .About .Support}}
+    <footer class="site-footer" data-pagefind-ignore="all">
+      {{- with .About}}<a href="{{.URL}}">{{.Name}}</a>{{end}}
+      {{- with .Support}}<a href="{{.URL}}">{{.Name}}</a>{{end}}
     </footer>
     {{- end}}
   </main>

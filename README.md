@@ -112,6 +112,14 @@ site:
   home: Town Notes.md                  # optional, relative to root; default: root folder note
   favicon: Attachments/icon.png        # optional, relative to the vault; default: a generic icon
   hidden_tags: [MOCs]                  # optional: organizing tags to leave off the site (and nested ones)
+  about: About.md                      # optional, relative to root: linked by its title from the sidebar and every page's footer
+  support:                             # optional: PayPal links for ```support blocks
+    page: Support.md                   # optional, relative to root: linked by its title from the sidebar and every page's footer
+    paypal_me: YourName                # PayPal.me name of the account to be paid
+    amounts: [1, 2, 3, 5, 7, 10]       # one-time amounts (default)
+    currency: USD                      # default
+    monthly:                           # optional: PayPal Subscriptions plans (create one per amount)
+      - {amount: 5, plan_id: P-1AB23456CD789012E}
 html:
   template_dir: ./templates            # optional: override layout.html
 hugo:
@@ -240,6 +248,14 @@ warnings.
 The shapes and place locations are embedded in the binary (Census Bureau
 cartographic boundaries and gazetteer, public domain);
 `tools/usmap/build.sh` regenerates them.
+
+### Support page
+
+The support page is an ordinary note in the vault. Wherever it contains a
+fenced `support` block (leave the block empty), the build fills in a
+button for each `site.support` amount (a PayPal.me link) and each monthly
+plan (a PayPal Subscriptions link). Set `site.support.page` to the note to
+link it, by its title, from every page.
 
 ### YouTube embeds
 

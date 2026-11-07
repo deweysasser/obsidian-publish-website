@@ -156,3 +156,35 @@ func TestValidateToolsAndDeploy(t *testing.T) {
 		}
 	}
 }
+
+func TestSupportDefaultsAndValidation(t *testing.T) {
+	c, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: {support: {paypal_me: ExampleName}}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp := c.Site.Support
+	if len(sp.Monthly) != 0 || len(sp.Amounts) != 6 || sp.Amounts[5] != 10 || sp.Currency != "USD" {
+		t.Errorf("support defaults %+v", sp)
+	}
+	for body, want := range map[string]string{
+		"{support: {}}":                               "paypal_me",
+		"{support: {paypal_me: a/b}}":                 "paypal_me",
+		"{support: {paypal_me: a, currency: usd}}":    "currency",
+		"{support: {paypal_me: a, amounts: [0]}}":     "amounts",
+		"{support: {paypal_me: a, amounts: [1.005]}}": "amounts",
+	} {
+		if _, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: "+body+"\n")); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err %v, want %q", body, err, want)
+		}
+	}
+}
+
+func TestSupportMonthly(t *testing.T) {
+	c, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: {support: {paypal_me: a, monthly: [{amount: 5, plan_id: P-1AB23456CD789012E}]}}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := c.Site.Support.Monthly; len(m) != 1 || m[0].Amount != 5 || m[0].PlanID != "P-1AB23456CD789012E" {
+		t.Errorf("monthly %+v", m)
+	}
+}

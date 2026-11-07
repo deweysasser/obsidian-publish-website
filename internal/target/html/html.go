@@ -39,11 +39,32 @@ type Target struct {
 	out    string
 	origin string // scheme://host of base_url, "" when it is not absolute
 	nav    *nav
+	// notes caches the links to notes named in the config (site.about, ...).
+	notes map[string]*tagLink
 	// versioned maps a static asset to its content-addressed copy, which
 	// browsers may cache forever.
 	versioned map[string]string
 	// Warn receives non-fatal problems.
 	Warn func(string)
+}
+
+// noteLink links the note a setting names (a path relative to root) by
+// its title, caching the answer; nil when unset.
+func (t *Target) noteLink(s *target.Site, setting, rel string) (*tagLink, error) {
+	if rel == "" {
+		return nil, nil
+	}
+	if l, ok := t.notes[setting]; ok {
+		return l, nil
+	}
+	src := path.Join(s.Config.Root, rel)
+	for _, p := range s.Pages {
+		if p.SourcePath == src {
+			t.notes[setting] = &tagLink{p.Title, p.URL}
+			return t.notes[setting], nil
+		}
+	}
+	return nil, fmt.Errorf("%s: %q is not a published note", setting, src)
 }
 
 // New creates the html target.
@@ -63,7 +84,7 @@ func New(cfg *config.Config) (*Target, error) {
 		}
 	}
 	t.tmpl = tmpl
-	t.versioned = map[string]string{}
+	t.versioned, t.notes = map[string]string{}, map[string]*tagLink{}
 	for _, name := range []string{"style.css", "app.js"} {
 		b, err := assetFS.ReadFile("assets/" + name)
 		if err != nil {
@@ -98,6 +119,9 @@ type view struct {
 	Modified                               string
 	Search, Math, Mermaid                  bool
 	Indexed                                bool
+	// site-wide links in the sidebar and footer; "" when not configured
+	// site-wide links to the about and support notes, by their titles
+	About, Support *tagLink
 }
 
 func (t *Target) write(s *target.Site, slug string, v view, current string) error {
@@ -106,6 +130,15 @@ func (t *Target) write(s *target.Site, slug string, v view, current string) erro
 		v.Canonical = t.origin + current
 	}
 	v.HasTags = len(s.Tags) > 0
+	var err error
+	if v.About, err = t.noteLink(s, "site.about", s.Config.Site.About); err != nil {
+		return err
+	}
+	if sp := s.Config.Site.Support; sp != nil {
+		if v.Support, err = t.noteLink(s, "site.support.page", sp.Page); err != nil {
+			return err
+		}
+	}
 	v.Style, v.Script = t.base+t.versioned["style.css"], t.base+t.versioned["app.js"]
 	v.Favicon = t.base + "assets/favicon.svg"
 	if f := s.Config.Site.Favicon; f != "" {

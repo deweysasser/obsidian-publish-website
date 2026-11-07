@@ -5,6 +5,7 @@ package render
 import (
 	"github.com/yuin/goldmark"
 
+	"github.com/deweysasser/obsidian-publish-website/internal/config"
 	"github.com/deweysasser/obsidian-publish-website/internal/index"
 	"github.com/deweysasser/obsidian-publish-website/internal/resolve"
 	"github.com/deweysasser/obsidian-publish-website/internal/selector"
@@ -49,6 +50,8 @@ type Renderer struct {
 	YouTubeEmbeddable func(id string) bool
 	// HiddenTag reports tags to leave out of rendered text (nil: none).
 	HiddenTag func(tag string) bool
+	// Support configures ```support blocks (nil: they render nothing).
+	Support *config.Support
 
 	fenceHooks map[string]FenceHook
 	inlineHook func(code string, line int, ctx Context) (string, bool)
@@ -75,6 +78,7 @@ func NewRenderer(ix *index.Index, pub *selector.Published, u urls.Scheme, mode M
 	r.fenceHooks["transcript"] = r.transcriptBlock
 	r.fenceHooks["usmap"] = r.usmapBlock
 	r.fenceHooks["statemap"] = r.statemapBlock
+	r.fenceHooks["support"] = r.supportBlock
 	r.inlineHook = r.dvInline
 	return r
 }

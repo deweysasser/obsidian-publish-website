@@ -4,9 +4,11 @@ package config
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -18,13 +20,49 @@ type Site struct {
 	Title   string `yaml:"title"`
 	BaseURL string `yaml:"base_url"`
 	Home    string `yaml:"home"`
+	// About is the note (relative to root) linked as "About" from every
+	// page's footer and the sidebar.
+	About string `yaml:"about"`
 	// Favicon is an image in the vault (path relative to the vault root);
 	// a generic icon is used when empty.
 	Favicon string `yaml:"favicon"`
 	// HiddenTags are organizing tags left off the site (case-insensitive,
 	// '#' optional; hiding "a" also hides "a/b").
 	HiddenTags []string `yaml:"hidden_tags"`
+	// Support configures PayPal payment links: the ```support block, and a
+	// link to the support note from every page (html target).
+	Support *Support `yaml:"support"`
 }
+
+// Support configures the payment links a ```support block renders: one
+// PayPal.me link per amount (use the PayPal.me name of the account to be
+// paid) and one subscribe link per monthly plan.
+type Support struct {
+	// Page is the support note (relative to root), linked from every page.
+	Page     string    `yaml:"page"`
+	PayPalMe string    `yaml:"paypal_me"`
+	Amounts  []float64 `yaml:"amounts"`
+	Currency string    `yaml:"currency"`
+	// Monthly are PayPal Subscriptions plans, one per monthly amount.
+	Monthly []MonthlyPlan `yaml:"monthly"`
+}
+
+// MonthlyPlan is a PayPal Subscriptions plan offered at a monthly amount.
+type MonthlyPlan struct {
+	Amount float64 `yaml:"amount"`
+	PlanID string  `yaml:"plan_id"`
+}
+
+// DefaultSupportAmounts are the amounts offered when none are configured.
+var DefaultSupportAmounts = []float64{1, 2, 3, 5, 7, 10}
+
+var (
+	paypalMeName = regexp.MustCompile(`^[A-Za-z0-9]{1,20}$`)
+	currencyCode = regexp.MustCompile(`^[A-Z]{3}$`)
+	paypalPlanID = regexp.MustCompile(`^P-[A-Z0-9]+$`)
+)
+
+func validAmount(a float64) bool { return a > 0 && math.Round(a*100) == a*100 }
 
 // TagHidden reports whether tag (with or without '#') is in HiddenTags.
 func (s Site) TagHidden(tag string) bool {
@@ -170,6 +208,14 @@ func (c *Config) ApplyDefaults() {
 			cf.APIToken = "env:CLOUDFLARE_API_TOKEN"
 		}
 	}
+	if sp := c.Site.Support; sp != nil {
+		if len(sp.Amounts) == 0 {
+			sp.Amounts = DefaultSupportAmounts
+		}
+		if sp.Currency == "" {
+			sp.Currency = "USD"
+		}
+	}
 	c.Root = strings.Trim(c.Root, "/")
 	if c.Hugo.Section == "" {
 		c.Hugo.Section = simpleSlug(path.Base(c.Root))
@@ -228,6 +274,36 @@ func (c *Config) Validate() error {
 		}
 		if c.Target != "html" {
 			errs = append(errs, errors.New("deploy.cloudflare_pages needs the html target"))
+		}
+	}
+	notePaths := map[string]string{"site.about": c.Site.About}
+	if sp := c.Site.Support; sp != nil {
+		notePaths["site.support.page"] = sp.Page
+	}
+	for name, a := range notePaths {
+		if a != "" && (path.IsAbs(a) || path.Clean(a) != a || strings.HasPrefix(a, "..")) {
+			errs = append(errs, fmt.Errorf("%s %q must be a clean path relative to root", name, a))
+		}
+	}
+	if sp := c.Site.Support; sp != nil {
+		if !paypalMeName.MatchString(sp.PayPalMe) {
+			errs = append(errs, fmt.Errorf("site.support.paypal_me %q must be a PayPal.me name (letters and digits)", sp.PayPalMe))
+		}
+		if !currencyCode.MatchString(sp.Currency) {
+			errs = append(errs, fmt.Errorf("site.support.currency %q must be a 3-letter code like USD", sp.Currency))
+		}
+		for _, a := range sp.Amounts {
+			if !validAmount(a) {
+				errs = append(errs, fmt.Errorf("site.support.amounts: %v must be positive with at most two decimals", a))
+			}
+		}
+		for _, m := range sp.Monthly {
+			if !validAmount(m.Amount) {
+				errs = append(errs, fmt.Errorf("site.support.monthly: amount %v must be positive with at most two decimals", m.Amount))
+			}
+			if !paypalPlanID.MatchString(m.PlanID) {
+				errs = append(errs, fmt.Errorf("site.support.monthly: plan_id %q must be a PayPal plan ID like P-1AB23456CD789012E", m.PlanID))
+			}
 		}
 	}
 	for _, g := range c.Exclude {

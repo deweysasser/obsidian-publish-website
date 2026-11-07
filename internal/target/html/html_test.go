@@ -244,3 +244,52 @@ func TestFingerprintedAssetsAndHeaders(t *testing.T) {
 		}
 	}
 }
+
+func TestAboutAndSupportLinks(t *testing.T) {
+	out := t.TempDir()
+	cfg := &config.Config{Output: out, Root: "R", Search: "none", Site: config.Site{Title: "S", About: "About.md",
+		Support: &config.Support{Page: "Support.md", PayPalMe: "A", Currency: "USD"}}}
+	tg, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	about := &render.Page{Slug: "about", URL: "/about/", Title: "About Title", SourcePath: "R/About.md", HTML: "<p>a</p>"}
+	support := &render.Page{Slug: "support-us", URL: "/support-us/", Title: "Support Title", SourcePath: "R/Support.md", HTML: "<p>s</p>"}
+	site := &target.Site{Config: cfg, Tree: &target.FolderNode{}, Pages: []*render.Page{about, support}}
+	if err := tg.WritePage(site, &render.Page{Slug: "p", URL: "/p/", Title: "P", HTML: "<p>x</p>"}); err != nil {
+		t.Fatal(err)
+	}
+	page, _ := os.ReadFile(filepath.Join(out, "p/index.html"))
+	for _, want := range []string{
+		`<li><a href="/about/">About Title</a></li>`, `<li><a href="/support-us/">Support Title</a></li>`, // sidebar
+		`<footer class="site-footer" data-pagefind-ignore="all"><a href="/about/">About Title</a><a href="/support-us/">Support Title</a>`,
+	} {
+		if !strings.Contains(string(page), want) {
+			t.Errorf("page lacks %q", want)
+		}
+	}
+
+	for setting, mod := range map[string]func(){
+		"site.about":        func() { cfg.Site.About = "Missing.md" },
+		"site.support.page": func() { cfg.Site.About, cfg.Site.Support.Page = "About.md", "Missing.md" },
+	} {
+		mod()
+		tg, _ := New(cfg)
+		if err := tg.WritePage(site, about); err == nil || !strings.Contains(err.Error(), setting) {
+			t.Errorf("missing %s note: err %v", setting, err)
+		}
+	}
+}
+
+func TestNoSiteFooterByDefault(t *testing.T) {
+	out := t.TempDir()
+	cfg := &config.Config{Output: out, Search: "none", Site: config.Site{Title: "S"}}
+	tg, _ := New(cfg)
+	site := &target.Site{Config: cfg, Tree: &target.FolderNode{}}
+	if err := tg.WritePage(site, &render.Page{Slug: "q", URL: "/q/", Title: "Q", HTML: "<p>x</p>"}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(out, "q/index.html")); strings.Contains(string(b), "site-footer") || strings.Contains(string(b), "/support/") {
+		t.Error("footer or support link without site.about/site.support")
+	}
+}
