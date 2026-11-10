@@ -221,3 +221,21 @@ func TestHiddenTags(t *testing.T) {
 		t.Error("inline hidden tag still rendered")
 	}
 }
+
+func TestTagsOff(t *testing.T) {
+	out := t.TempDir()
+	cfg := fixtureConfig(out, "html")
+	off := false
+	cfg.Site.Tags = &off
+	if _, err := Run(cfg, zerolog.Nop()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "tags")); err == nil {
+		t.Error("tags/ still written")
+	}
+	for _, f := range []string{"index.html", "issues/road-repair/index.html", "sitemap.xml"} {
+		if s := read(t, filepath.Join(out, f)); strings.Contains(s, `class="tag"`) || strings.Contains(s, "/tags/") || strings.Contains(s, "#civic") {
+			t.Errorf("%s still shows tags", f)
+		}
+	}
+}

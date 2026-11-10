@@ -29,6 +29,9 @@ type Site struct {
 	// HiddenTags are organizing tags left off the site (case-insensitive,
 	// '#' optional; hiding "a" also hides "a/b").
 	HiddenTags []string `yaml:"hidden_tags"`
+	// Tags set to false leaves every tag off the site: no tag pages, tag
+	// links or inline tags. Default true.
+	Tags *bool `yaml:"tags"`
 	// Support configures PayPal payment links: the ```support block, and a
 	// link to the support note from every page (html target).
 	Support *Support `yaml:"support"`
@@ -64,8 +67,12 @@ var (
 
 func validAmount(a float64) bool { return a > 0 && math.Round(a*100) == a*100 }
 
-// TagHidden reports whether tag (with or without '#') is in HiddenTags.
+// TagHidden reports whether tag (with or without '#') is in HiddenTags, or
+// whether tags are off altogether.
 func (s Site) TagHidden(tag string) bool {
+	if s.Tags != nil && !*s.Tags {
+		return true
+	}
 	t := strings.ToLower(strings.TrimPrefix(tag, "#"))
 	for _, h := range s.HiddenTags {
 		h = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(h), "#"))

@@ -112,6 +112,7 @@ site:
   home: Town Notes.md                  # optional, relative to root; default: root folder note
   favicon: Attachments/icon.png        # optional, relative to the vault; default: a generic icon
   hidden_tags: [MOCs]                  # optional: organizing tags to leave off the site (and nested ones)
+  tags: false                          # optional: leave all tags off the site (default true)
   about: About.md                      # optional, relative to root: linked by its title from the sidebar and every page's footer
   support:                             # optional: PayPal links for ```support blocks
     page: Support.md                   # optional, relative to root: linked by its title from the sidebar and every page's footer
