@@ -5,6 +5,7 @@ package youtube
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -62,6 +63,9 @@ type entry struct {
 	Checked    time.Time `json:"checked"`
 }
 
+// Endpoint is YouTube's oEmbed endpoint; tests replace it.
+var Endpoint = "https://www.youtube.com/oembed"
+
 // Checker answers "may this video be embedded?" from YouTube's oEmbed
 // endpoint, which refuses (401) videos whose owner disabled embedding.
 // Answers are cached on disk; anything unknown counts as embeddable, and the
@@ -76,7 +80,7 @@ type Checker struct {
 
 // NewChecker loads the cache at path (missing or unreadable means empty).
 func NewChecker(path string) *Checker {
-	c := &Checker{Endpoint: "https://www.youtube.com/oembed", Client: &http.Client{Timeout: 10 * time.Second},
+	c := &Checker{Endpoint: Endpoint, Client: &http.Client{Timeout: 10 * time.Second},
 		path: path, known: map[string]entry{}}
 	if b, err := os.ReadFile(path); err == nil { // #nosec G304 -- the cache path this program chose
 		_ = json.Unmarshal(b, &c.known)
@@ -84,22 +88,60 @@ func NewChecker(path string) *Checker {
 	return c
 }
 
-// Prefetch asks YouTube about every id without a fresh cached answer.
-func (c *Checker) Prefetch(ctx context.Context, ids []string) {
+// Result says how a Prefetch went.
+type Result struct {
+	Asked   int // lookups attempted (ids without a fresh cached answer)
+	Refused int // answered: the owner disallows embedding
+	Failed  int // got no answer: network, TLS, timeout, or an unexpected status
+	// Unknown is how many failed with no cached answer to fall back on.
+	// Embeddable reports those as embeddable, which may be wrong.
+	Unknown int
+	Err     error // the first failure, as a sample; nil when Failed is 0
+}
+
+// Prefetch asks YouTube about every id without a fresh cached answer. A
+// lookup that fails keeps any older cached answer; Result counts both kinds
+// of failure, so the caller can tell a flaky video from a check that never
+// worked at all.
+func (c *Checker) Prefetch(ctx context.Context, ids []string) Result {
+	var (
+		res Result
+		rmu sync.Mutex
+		wg  sync.WaitGroup
+	)
+	fail := func(id string, err error) {
+		c.mu.Lock()
+		_, cached := c.known[id]
+		c.mu.Unlock()
+		rmu.Lock()
+		defer rmu.Unlock()
+		res.Failed++
+		if !cached {
+			res.Unknown++
+		}
+		if res.Err == nil {
+			res.Err = err
+		}
+	}
 	todo := make(chan string)
-	var wg sync.WaitGroup
 	for range 8 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for id := range todo {
-				if ok, known := c.ask(ctx, id); known {
-					c.mu.Lock()
-					c.known[id] = entry{ok, time.Now()}
-					c.mu.Unlock()
+				ok, err := c.ask(ctx, id)
+				if err != nil {
+					fail(id, err)
+					continue
+				}
+				c.mu.Lock()
+				c.known[id] = entry{ok, time.Now()}
+				c.mu.Unlock()
+				if !ok {
+					rmu.Lock()
+					res.Refused++
+					rmu.Unlock()
 				}
 			}
-		}()
+		})
 	}
 	seen := map[string]bool{}
 	for _, id := range ids {
@@ -110,33 +152,38 @@ func (c *Checker) Prefetch(ctx context.Context, ids []string) {
 			continue
 		}
 		seen[id] = true
+		res.Asked++
 		select {
 		case todo <- id:
-		case <-ctx.Done():
+		case <-ctx.Done(): // out of time: never asked, so no answer either
+			fail(id, ctx.Err())
 		}
 	}
 	close(todo)
 	wg.Wait()
+	return res
 }
 
-func (c *Checker) ask(ctx context.Context, id string) (embeddable, known bool) {
+// ask returns whether YouTube allows embedding id, or an error when it gave
+// no answer.
+func (c *Checker) ask(ctx context.Context, id string) (bool, error) {
 	q := url.Values{"format": {"json"}, "url": {"https://www.youtube.com/watch?v=" + id}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.Endpoint+"?"+q.Encode(), nil)
 	if err != nil {
-		return false, false
+		return false, err
 	}
 	resp, err := c.Client.Do(req)
 	if err != nil {
-		return false, false
+		return false, err
 	}
 	_ = resp.Body.Close() // only the status matters
 	switch resp.StatusCode {
 	case http.StatusOK:
-		return true, true
+		return true, nil
 	case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
-		return false, true
+		return false, nil
 	}
-	return false, false
+	return false, fmt.Errorf("oEmbed answered HTTP %d", resp.StatusCode)
 }
 
 // Embeddable reports the cached answer; unknown videos count as embeddable.
