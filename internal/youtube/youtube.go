@@ -78,7 +78,7 @@ type Checker struct {
 func NewChecker(path string) *Checker {
 	c := &Checker{Endpoint: "https://www.youtube.com/oembed", Client: &http.Client{Timeout: 10 * time.Second},
 		path: path, known: map[string]entry{}}
-	if b, err := os.ReadFile(path); err == nil {
+	if b, err := os.ReadFile(path); err == nil { // #nosec G304 -- the cache path this program chose
 		_ = json.Unmarshal(b, &c.known)
 	}
 	return c
@@ -129,7 +129,7 @@ func (c *Checker) ask(ctx context.Context, id string) (embeddable, known bool) {
 	if err != nil {
 		return false, false
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close() // only the status matters
 	switch resp.StatusCode {
 	case http.StatusOK:
 		return true, true
@@ -155,8 +155,10 @@ func (c *Checker) Save() error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(c.path), 0o755); err != nil {
+	// Readable by others, like the vault it lives in: the cache holds only
+	// public video IDs, and a container runner may read it as another user.
+	if err := os.MkdirAll(filepath.Dir(c.path), 0o755); err != nil { // #nosec G301 -- see above
 		return err
 	}
-	return os.WriteFile(c.path, b, 0o644)
+	return os.WriteFile(c.path, b, 0o644) // #nosec G306 -- see above
 }

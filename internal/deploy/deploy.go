@@ -20,16 +20,37 @@ import (
 
 var deploymentURLRe = regexp.MustCompile(`https://\S+\.pages\.dev\S*`)
 
-// Run deploys cfg.Output as configured in cfg.Deploy and returns the
-// deployment URL reported by the provider.
+// Run deploys cfg.Output to every target configured in cfg.Deploy, in order
+// (Cloudflare Pages, then R2), and returns the URL of the last one: the
+// deployment URL Pages reports, or site.base_url for R2.
 func Run(ctx context.Context, cfg *config.Config, r tools.Runner, log zerolog.Logger) (string, error) {
-	cf := cfg.Deploy.CloudflarePages
-	if cf == nil {
-		return "", errors.New("no deploy section in the config (deploy.cloudflare_pages)")
+	if !cfg.Deploy.Any() {
+		return "", errors.New("no deploy section in the config (deploy.cloudflare_pages or deploy.r2)")
 	}
 	if _, err := os.Stat(filepath.Join(cfg.Output, target.Marker)); err != nil {
 		return "", fmt.Errorf("%s was not built by this program (no %s marker); build it first", cfg.Output, target.Marker)
 	}
+	var url string
+	if cfg.Deploy.CloudflarePages != nil {
+		u, err := pages(ctx, cfg, r, log)
+		if err != nil {
+			return "", err
+		}
+		url = u
+	}
+	if cfg.Deploy.R2 != nil {
+		u, err := r2(ctx, cfg, log)
+		if err != nil {
+			return "", err
+		}
+		url = u
+	}
+	return url, nil
+}
+
+// pages deploys with wrangler pages deploy.
+func pages(ctx context.Context, cfg *config.Config, r tools.Runner, log zerolog.Logger) (string, error) {
+	cf := cfg.Deploy.CloudflarePages
 	account, err := secret.Resolve(ctx, cf.AccountID)
 	if err != nil {
 		return "", fmt.Errorf("deploy.cloudflare_pages.account_id: %w", err)

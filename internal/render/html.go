@@ -132,21 +132,22 @@ func (c *codeRenderer) render(w util.BufWriter, src []byte, node ast.Node, enter
 	}
 	n := node.(*ast.FencedCodeBlock)
 	lang := string(n.Language(src))
-	if lang == "mermaid" {
-		w.WriteString(`<pre class="mermaid">`)
-	} else if lang != "" {
-		w.WriteString(`<pre><code class="language-` + string(util.EscapeHTML([]byte(lang))) + `">`)
-	} else {
-		w.WriteString("<pre><code>")
+	switch lang {
+	case "mermaid":
+		_, _ = w.WriteString(`<pre class="mermaid">`)
+	case "":
+		_, _ = w.WriteString("<pre><code>")
+	default:
+		_, _ = w.WriteString(`<pre><code class="language-` + string(util.EscapeHTML([]byte(lang))) + `">`)
 	}
 	for i := 0; i < n.Lines().Len(); i++ {
 		seg := n.Lines().At(i)
-		w.Write(util.EscapeHTML(seg.Value(src)))
+		_, _ = w.Write(util.EscapeHTML(seg.Value(src)))
 	}
 	if lang == "mermaid" {
-		w.WriteString("</pre>\n")
+		_, _ = w.WriteString("</pre>\n")
 	} else {
-		w.WriteString("</code></pre>\n")
+		_, _ = w.WriteString("</code></pre>\n")
 	}
 	return ast.WalkSkipChildren, nil
 }

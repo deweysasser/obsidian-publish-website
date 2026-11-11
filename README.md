@@ -34,7 +34,7 @@ python3 -m http.server -d site 8000     # preview at http://localhost:8000/
 
 For a real deployment set `base_url` to the final URL (see
 [html](#html-default)) and either push `site/` to any static host or use
-[`publish`](#publishing) to deploy to Cloudflare Pages.
+[`publish`](#publishing) to deploy to Cloudflare Pages or R2.
 
 ## Install
 
@@ -52,7 +52,7 @@ Runtime requirements for the binary (the [container](#container) has them all):
 | Needed for | Requirement |
 |---|---|
 | Dataview queries | Node.js ≥ 18 on `PATH` (or `dataview: none`) |
-| Search (html target), deploy | Docker (or `tools.runner: host` with Pagefind / wrangler on `PATH`; or `search: none`) |
+| Search (html target), Pages deploy | Docker (or `tools.runner: host` with Pagefind / wrangler on `PATH`; or `search: none`) |
 
 ## Container
 
@@ -308,6 +308,78 @@ value. The token is never accepted inline, and is never put in a process
 argument or container configuration: the docker runner hands it to the
 container on stdin. It needs only *Account → Cloudflare Pages → Edit*.
 `deploy` refuses to upload a directory this program did not build.
+
+### Cloudflare R2
+
+A site too large for Pages (it caps the file count) can be served from an R2
+bucket with a custom domain instead. `deploy.r2` syncs the build to the
+bucket over R2's S3 API, with no external tool:
+
+```yaml
+site:
+  base_url: https://example.org/            # the bucket's public domain
+deploy:
+  r2:
+    bucket: my-site                           # holds this site and nothing else
+    account_id: env:CLOUDFLARE_ACCOUNT_ID     # default; or op://…, or the literal ID
+    access_key_id: op://<vault>/<item>/username        # default env:R2_ACCESS_KEY_ID
+    secret_access_key: op://<vault>/<item>/password    # default env:R2_SECRET_ACCESS_KEY
+    # endpoint: https://<account_id>.r2.cloudflarestorage.com   (default)
+    # concurrency: 64                         # uploads in flight
+    # max_delete_fraction: 0.25               # refuse to delete more of the bucket
+    purge:                                    # optional
+      zone_id: <32-hex zone ID>
+      api_token: op://<vault>/<item>/password # default env:CLOUDFLARE_PURGE_TOKEN
+      # batch_size: 100                       # URLs per request (Free plan limit)
+      # urls_per_second: 800                  # per account (Free plan limit)
+      # everything_over: 5000                 # purge the whole zone above this
+```
+
+- **The bucket belongs to the site.** The deploy makes the bucket match the
+  build, so anything else in it is deleted.
+- **Sync.** Files whose MD5 differs from the object's ETag are uploaded,
+  each in a single PUT so the ETag stays the MD5; a rebuild of an unchanged
+  vault uploads nothing. Assets go up before the pages and search entry
+  points that refer to them. Objects the build no longer has are deleted,
+  but only after every upload succeeded. The build marker, `_headers` and
+  `_redirects` are not uploaded: they are Pages control files, and R2 would
+  serve them as ordinary files. Set cache headers and redirects as
+  Cloudflare rules on the zone instead.
+- **Mass-delete guard.** A build with no files, or one that would delete
+  more than `max_delete_fraction` of the bucket's objects (beyond the first
+  10), is refused before anything is uploaded: it usually means a broken
+  build, such as an unmounted vault. `--allow-mass-delete` lets one run
+  through; `max_delete_fraction: 1` turns the guard off.
+- **Content types** come from a fixed table, not the host's MIME database,
+  so every host sets the same ones. Only changed files are uploaded, so
+  objects put in the bucket some other way keep their old types until
+  `deploy --force-upload` re-uploads everything once.
+- **Throttling.** R2 answers 429 or 503 when pushed. Those pause every
+  upload for at least the `Retry-After` the server sends; other transient
+  failures (timeouts, dropped connections, 5xx) are retried with backoff.
+- **Purge.** Each uploaded or deleted file's URL (`base_url` + path,
+  percent-encoded as the site links it) is purged, plus `dir/` for each
+  `dir/index.html` and `base_url` for the root `index.html`, since pages are
+  linked as `dir/`. Batches go out together, paced to `urls_per_second`.
+  Above `everything_over` URLs the whole zone is purged instead, and also if
+  a batch still fails transiently after its retries. A permanent failure (a
+  bad token, a URL outside the zone) fails the deploy. If the sync fails
+  part way, or the deploy is interrupted (SIGINT or SIGTERM), what it had
+  already changed is still purged. The token needs only
+  *Zone → Cache Purge → Purge* on that zone.
+- **Credentials** follow the same rules as Pages: the S3 keys and the purge
+  token must be `op://` or `env:` references, and are never put in a process
+  argument, log line or error message. All are resolved before anything is
+  uploaded. Create the S3 keys as an R2 API token with *Object Read & Write*
+  on the one bucket.
+- **One deploy at a time.** Two deploys to the same bucket at once can undo
+  each other's uploads and deletes; a scheduler should not start one while
+  the last is still running.
+
+Both targets may be configured at once; Pages runs first. R2 logs
+`Synced to R2` with `uploaded`, `deleted` and `unchanged` (and the error, if
+the sync failed), then, on success, `Deployed` with `url`, `uploaded`,
+`deleted`, `unchanged`, `purged` and `elapsed_ms`.
 
 ### External tools
 

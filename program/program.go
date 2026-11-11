@@ -12,7 +12,9 @@ import (
 	"github.com/deweysasser/obsidian-publish-website/internal/tools"
 	"io"
 	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 
 	"github.com/alecthomas/kong"
 	"github.com/mattn/go-colorable"
@@ -40,11 +42,24 @@ type Options struct {
 type DeployCmd struct {
 	Config string `short:"c" default:"publish.yaml" help:"Path to the publish config file"`
 	Output string `short:"o" help:"Override the config's output directory"`
+	DeployFlags
 }
 
 // PublishCmd builds and then deploys.
 type PublishCmd struct {
 	BuildCmd
+	DeployFlags
+}
+
+// DeployFlags are one-run overrides for the deploy step.
+type DeployFlags struct {
+	ForceUpload     bool `help:"R2: re-upload every file whatever its checksum, rewriting metadata such as Content-Type"`
+	AllowMassDelete bool `help:"R2: allow this run to delete more than deploy.r2.max_delete_fraction of the bucket"`
+}
+
+func (f DeployFlags) apply(cfg *config.Config) {
+	cfg.Deploy.ForceUpload = f.ForceUpload
+	cfg.Deploy.AllowMassDelete = f.AllowMassDelete
 }
 
 // BuildCmd builds a site from a configuration file.
@@ -117,6 +132,7 @@ func (cmd *DeployCmd) Run(logger zerolog.Logger) error {
 	if err != nil {
 		return err
 	}
+	cmd.apply(cfg)
 	return runDeploy(cfg, logger)
 }
 
@@ -126,8 +142,9 @@ func (cmd *PublishCmd) Run(logger zerolog.Logger) error {
 	if err != nil {
 		return err
 	}
-	if cfg.Deploy.CloudflarePages == nil {
-		return errors.New("publish needs a deploy section in the config (deploy.cloudflare_pages); use build to only build")
+	cmd.DeployFlags.apply(cfg)
+	if !cfg.Deploy.Any() {
+		return errors.New("publish needs a deploy section in the config (deploy.cloudflare_pages or deploy.r2); use build to only build")
 	}
 	if _, err := build.Run(cfg, logger); err != nil {
 		return err
@@ -137,10 +154,16 @@ func (cmd *PublishCmd) Run(logger zerolog.Logger) error {
 
 func runDeploy(cfg *config.Config, logger zerolog.Logger) error {
 	r := tools.New(cfg.Tools.Runner, cfg.Tools.Image)
-	if err := r.Check("wrangler"); err != nil {
-		return err
+	if cfg.Deploy.CloudflarePages != nil { // R2 needs no external tool
+		if err := r.Check("wrangler"); err != nil {
+			return err
+		}
 	}
-	url, err := deploy.Run(context.Background(), cfg, r, logger)
+	// SIGINT/SIGTERM cancel the deploy cleanly: R2 still purges what it
+	// had already changed before returning.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	url, err := deploy.Run(ctx, cfg, r, logger)
 	if err == nil && url != "" {
 		fmt.Println(url)
 	}

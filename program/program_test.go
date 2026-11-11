@@ -4,6 +4,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/deweysasser/obsidian-publish-website/internal/target"
 	"github.com/rs/zerolog"
 	"os"
 	"testing"
@@ -114,4 +115,32 @@ func TestPublishWithoutDeployConfigFailsBeforeBuilding(t *testing.T) {
 	assert.ErrorContains(t, err, "deploy")
 	_, statErr := os.Stat(filepath.Join(dir, "out"))
 	assert.True(t, os.IsNotExist(statErr), "nothing should be built")
+}
+
+func TestDeployFlags(t *testing.T) {
+	var p Options
+	_, err := p.Parse([]string{"publish", "--force-upload", "--allow-mass-delete"})
+	assert.NoError(t, err)
+	assert.True(t, p.Publish.ForceUpload)
+	assert.True(t, p.Publish.AllowMassDelete)
+	var d Options
+	_, err = d.Parse([]string{"deploy", "--force-upload"})
+	assert.NoError(t, err)
+	assert.True(t, d.Deploy.ForceUpload)
+	assert.False(t, d.Deploy.AllowMassDelete)
+}
+
+func TestR2OnlyDeployNeedsNoWrangler(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out")
+	assert.NoError(t, os.MkdirAll(out, 0o750))
+	assert.NoError(t, os.WriteFile(filepath.Join(out, target.Marker), nil, 0o600))
+	cfg := filepath.Join(dir, "publish.yaml")
+	assert.NoError(t, os.WriteFile(cfg, []byte("vault: /v\nroot: R\noutput: out\ntools: {runner: host}\n"+
+		"deploy: {r2: {bucket: site, account_id: 0123456789abcdef0123456789abcdef, access_key_id: env:UNSET_R2_KEY_XYZ, secret_access_key: env:UNSET_R2_SECRET_XYZ}}\n"), 0o600))
+	t.Setenv("PATH", t.TempDir()) // no wrangler anywhere
+	err := (&DeployCmd{Config: cfg}).Run(zerolog.Nop())
+	// It gets past the tool check to resolving the R2 credentials.
+	assert.ErrorContains(t, err, "deploy.r2.access_key_id")
+	assert.NotContains(t, err.Error(), "wrangler")
 }

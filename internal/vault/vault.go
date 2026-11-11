@@ -102,7 +102,7 @@ func (v *Vault) Note(p string) *Note { return v.byPath[p] }
 func (v *Vault) AbsPath(rel string) string { return filepath.Join(v.Root, filepath.FromSlash(rel)) }
 
 func readNote(abs, rel string) (*Note, string, error) {
-	raw, err := os.ReadFile(abs)
+	raw, err := os.ReadFile(abs) // #nosec G304 -- a note found by walking the vault
 	if err != nil {
 		return nil, "", err
 	}

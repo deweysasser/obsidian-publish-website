@@ -126,6 +126,88 @@ func TestToolsAndDeployDefaults(t *testing.T) {
 	}
 }
 
+func TestR2Defaults(t *testing.T) {
+	t.Setenv(RunnerEnv, "")
+	c, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: {base_url: https://example.org/}\ndeploy:\n  r2:\n    bucket: site\n    purge: {zone_id: 0123456789abcdef0123456789abcdef}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := c.Deploy.R2
+	if r == nil || r.AccountID != "env:CLOUDFLARE_ACCOUNT_ID" || r.AccessKeyID != "env:R2_ACCESS_KEY_ID" ||
+		r.SecretAccessKey != "env:R2_SECRET_ACCESS_KEY" || r.Concurrency != 64 || r.MaxDeleteFraction != 0.25 || r.Endpoint != "" {
+		t.Errorf("r2 %+v", r)
+	}
+	if p := r.Purge; p.APIToken != "env:CLOUDFLARE_PURGE_TOKEN" || p.BatchSize != 100 || p.URLsPerSecond != 800 || p.EverythingOver != 5000 {
+		t.Errorf("purge %+v", p)
+	}
+	if !c.Deploy.Any() || c.Deploy.CloudflarePages != nil || c.Deploy.ForceUpload || c.Deploy.AllowMassDelete {
+		t.Errorf("deploy %+v", c.Deploy)
+	}
+	// An explicit endpoint needs no account ID.
+	c, err = Load(writeConfig(t, "vault: /v\nroot: R\ndeploy: {r2: {bucket: site, endpoint: \"https://s3.example.com\"}}\n"))
+	if err != nil || c.Deploy.R2.AccountID != "" {
+		t.Errorf("endpoint config: %+v %v", c.Deploy.R2, err)
+	}
+	// The command-line-only switches can't be set from the file.
+	c, _ = Load(writeConfig(t, "vault: /v\nroot: R\ndeploy: {r2: {bucket: site}, force_upload: true, allow_mass_delete: true}\n"))
+	if c != nil && (c.Deploy.ForceUpload || c.Deploy.AllowMassDelete) {
+		t.Error("force_upload / allow_mass_delete read from the config file")
+	}
+	c, _ = Load(writeConfig(t, "vault: /v\nroot: R\n"))
+	if c.Deploy.Any() {
+		t.Error("no deploy section should mean no deploy")
+	}
+}
+
+func TestValidateR2(t *testing.T) {
+	t.Setenv(RunnerEnv, "")
+	const id = "0123456789abcdef0123456789abcdef"
+	const site = "site: {base_url: https://x/}\n"
+	for body, want := range map[string]string{
+		"deploy: {r2: {}}\n":                                                                                                    "deploy.r2.bucket",
+		"deploy: {r2: {bucket: b}}\n":                                                                                           "deploy.r2.bucket",
+		"deploy: {r2: {bucket: My_Bucket}}\n":                                                                                   "deploy.r2.bucket",
+		"deploy: {r2: {bucket: site, access_key_id: AKIA123}}\n":                                                                "access_key_id must be",
+		"deploy: {r2: {bucket: site, secret_access_key: s3cr3t}}\n":                                                             "secret_access_key must be",
+		"deploy: {r2: {bucket: site, account_id: nothex}}\n":                                                                    "account_id must be",
+		"deploy: {r2: {bucket: site, account_id: 0123456789ABCDEF0123456789abcdef}}\n":                                          "account_id must be",
+		"deploy: {r2: {bucket: site, endpoint: \"http://x\"}}\n":                                                                "https://",
+		"deploy: {r2: {bucket: site, endpoint: \"https://x/path\"}}\n":                                                          "scheme and host only",
+		"deploy: {r2: {bucket: site, endpoint: \"https://u:s3cr3t@x\"}}\n":                                                      "scheme and host only",
+		"deploy: {r2: {bucket: site, concurrency: -1}}\n":                                                                       "concurrency",
+		"deploy: {r2: {bucket: site, max_delete_fraction: 1.5}}\n":                                                              "max_delete_fraction",
+		"deploy: {r2: {bucket: site, max_delete_fraction: -0.1}}\n":                                                             "max_delete_fraction",
+		"target: hugo\ndeploy: {r2: {bucket: site}}\n":                                                                          "html target",
+		"deploy: {r2: {bucket: site, purge: {zone_id: z}}}\n" + site:                                                            "zone_id",
+		"deploy: {r2: {bucket: site, purge: {zone_id: " + id + ", api_token: abc}}}\n" + site:                                   "api_token must be",
+		"deploy: {r2: {bucket: site, purge: {zone_id: " + id + ", batch_size: -1}}}\n" + site:                                   "batch_size",
+		"deploy: {r2: {bucket: site, purge: {zone_id: " + id + ", urls_per_second: -1}}}\n" + site:                              "urls_per_second",
+		"deploy: {r2: {bucket: site, purge: {zone_id: " + id + "}}}\nsite: {base_url: /}\n":                                     "absolute site.base_url",
+		"deploy: {r2: {bucket: site, account_id: " + id + ", access_key_id: op://V/I/u}}\nsearch: none\n":                       "",
+		"deploy: {r2: {bucket: my.site-1, max_delete_fraction: 1}, cloudflare_pages: {project: p}}\n" + site + "search: none\n": "",
+	} {
+		_, err := Load(writeConfig(t, "vault: /v\nroot: R\n"+body))
+		if want == "" && err != nil || want != "" && (err == nil || !strings.Contains(err.Error(), want)) {
+			t.Errorf("%q: err %v, want %q", body, err, want)
+		}
+		if err != nil && strings.Contains(err.Error(), "s3cr3t") {
+			t.Errorf("%q: error echoes the secret: %v", body, err)
+		}
+	}
+	// Neither account_id nor endpoint: ApplyDefaults fills account_id, so
+	// build the config directly.
+	c := &Config{Target: "html", Deploy: Deploy{R2: &R2{Bucket: "site", AccessKeyID: "env:A", SecretAccessKey: "env:B", Concurrency: 1, MaxDeleteFraction: 0.5}}}
+	if errs := c.Deploy.R2.validate(c); len(errs) != 1 || !strings.Contains(errs[0].Error(), "account_id or endpoint") {
+		t.Errorf("errs %v", errs)
+	}
+	// Errors come out in a fixed order.
+	c.Deploy.R2.AccessKeyID, c.Deploy.R2.SecretAccessKey = "x", "y"
+	errs := c.Deploy.R2.validate(c)
+	if len(errs) != 3 || !strings.Contains(errs[1].Error(), "access_key_id") || !strings.Contains(errs[2].Error(), "secret_access_key") {
+		t.Errorf("errs %v", errs)
+	}
+}
+
 func TestRunnerEnvOverridesConfig(t *testing.T) {
 	t.Setenv(RunnerEnv, "host")
 	c, err := Load(writeConfig(t, "vault: /v\nroot: R\ntools: {runner: docker}\n"))
@@ -145,6 +227,7 @@ func TestValidateToolsAndDeploy(t *testing.T) {
 	t.Setenv(RunnerEnv, "")
 	for body, want := range map[string]string{
 		"tools: {runner: podman}\n":                                                        "tools.runner",
+		"tools: {image: --privileged}\n":                                                   "tools.image",
 		"deploy: {cloudflare_pages: {}}\n":                                                 "deploy.cloudflare_pages.project",
 		"deploy: {cloudflare_pages: {project: p, api_token: abc123}}\n":                    "api_token must be",
 		"target: hugo\ndeploy: {cloudflare_pages: {project: p}}\n":                         "html target",

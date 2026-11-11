@@ -21,6 +21,7 @@ func IsReference(v string) bool {
 func Resolve(ctx context.Context, v string) (string, error) {
 	switch {
 	case strings.HasPrefix(v, "op://"):
+		// #nosec G204 -- v starts with "op://", so op can't take it as a flag; no shell
 		cmd := exec.CommandContext(ctx, "op", "read", "--no-newline", v)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr

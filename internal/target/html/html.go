@@ -174,6 +174,7 @@ func (t *Target) WritePage(s *target.Site, p *render.Page) error {
 	if top, _, _ := strings.Cut(p.Slug, "/"); reserved[top] {
 		return fmt.Errorf("%s: its URL /%s/ is reserved for generated pages in the html target; rename the note or folder", p.SourcePath, top)
 	}
+	// #nosec G203 -- rendered Markdown; raw HTML in a note is deliberately kept (the vault is the author's)
 	v := view{Title: p.Title, Content: template.HTML(p.HTML), TOC: tocWithout(p.TOC), Backlinks: p.Backlinks,
 		Crumbs: crumbs(s, p.SourcePath, p.Slug), Indexed: true, Description: describe(p), Image: shareImage(p.HTML)}
 	if !p.Mtime.IsZero() {
@@ -219,7 +220,8 @@ func (t *Target) Finalize(s *target.Site) error {
 	if err := t.writeTags(s); err != nil {
 		return err
 	}
-	if err := t.write(s, notFoundSlug, view{Title: "Not found", Content: template.HTML(`<p>That page does not exist. Try the <a href="` + t.base + `">home page</a> or search.</p>`)}, ""); err != nil {
+	// #nosec G203 -- the one interpolated value is escaped
+	if err := t.write(s, notFoundSlug, view{Title: "Not found", Content: template.HTML(`<p>That page does not exist. Try the <a href="` + template.HTMLEscapeString(t.base) + `">home page</a> or search.</p>`)}, ""); err != nil {
 		return err
 	}
 	if err := target.WriteFile(t.out, ".nojekyll", nil); err != nil {
@@ -289,7 +291,7 @@ func (t *Target) writeTags(s *target.Site) error {
 			template.HTMLEscapeString(t.scheme.TagURL(tg)), template.HTMLEscapeString(tg), len(s.Tags[tg]))
 	}
 	b.WriteString("</ul>")
-	if err := t.write(s, "tags", view{Title: "Tags", Content: template.HTML(b.String())}, t.scheme.PageURL("tags")); err != nil {
+	if err := t.write(s, "tags", view{Title: "Tags", Content: template.HTML(b.String())}, t.scheme.PageURL("tags")); err != nil { // #nosec G203 -- built with HTMLEscapeString
 		return err
 	}
 	for _, tg := range names {
@@ -300,7 +302,7 @@ func (t *Target) writeTags(s *target.Site) error {
 		}
 		pb.WriteString("</ul>")
 		slug := "tags/" + selector.Slugify(strings.TrimPrefix(tg, "#"))
-		if err := t.write(s, slug, view{Title: tg, Content: template.HTML(pb.String())}, ""); err != nil {
+		if err := t.write(s, slug, view{Title: tg, Content: template.HTML(pb.String())}, ""); err != nil { // #nosec G203 -- built with HTMLEscapeString
 			return err
 		}
 	}
@@ -435,7 +437,7 @@ func (n *nav) html(current string) template.HTML {
 		b.WriteString("</ul>")
 	}
 	walk(n.root)
-	return template.HTML(b.String())
+	return template.HTML(b.String()) // #nosec G203 -- built with HTMLEscapeString
 }
 
 func listingHTML(n *target.FolderNode) template.HTML {
@@ -448,7 +450,7 @@ func listingHTML(n *target.FolderNode) template.HTML {
 		fmt.Fprintf(&b, `<li><a href="%s">%s</a></li>`, template.HTMLEscapeString(p.URL), template.HTMLEscapeString(p.Title))
 	}
 	b.WriteString("</ul>")
-	return template.HTML(b.String())
+	return template.HTML(b.String()) // #nosec G203 -- built with HTMLEscapeString
 }
 
 var _ target.Target = (*Target)(nil)
