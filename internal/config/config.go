@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"unicode"
 
 	"github.com/bmatcuk/doublestar/v4"
+	"github.com/deweysasser/obsidian-publish-website/internal/secret"
 	"gopkg.in/yaml.v3"
 )
 
@@ -114,9 +116,55 @@ type CloudflarePages struct {
 	APIToken  string `yaml:"api_token"`
 }
 
+// R2 syncs the html output to a Cloudflare R2 bucket over its S3 API: it
+// uploads new and changed files, deletes removed ones, and optionally purges
+// their URLs from Cloudflare's cache. Credentials accept "op://vault/item/field"
+// or "env:NAME"; AccountID may also be a literal.
+type R2 struct {
+	AccountID       string `yaml:"account_id"`
+	Bucket          string `yaml:"bucket"`
+	AccessKeyID     string `yaml:"access_key_id"`
+	SecretAccessKey string `yaml:"secret_access_key"`
+	// Endpoint overrides https://<account_id>.r2.cloudflarestorage.com.
+	Endpoint string `yaml:"endpoint"`
+	// Concurrency is how many uploads run at once.
+	Concurrency int `yaml:"concurrency"`
+	// MaxDeleteFraction refuses a deploy that would delete more than this
+	// fraction of the bucket's objects (a guard against publishing a broken,
+	// near-empty build). 1 turns the guard off; --allow-mass-delete overrides
+	// it for one run.
+	MaxDeleteFraction float64 `yaml:"max_delete_fraction"`
+	// Purge, when set, purges changed URLs (site.base_url + path) afterwards.
+	Purge *Purge `yaml:"purge"`
+}
+
+// Purge clears changed URLs from a Cloudflare zone's cache.
+type Purge struct {
+	ZoneID   string `yaml:"zone_id"`
+	APIToken string `yaml:"api_token"`
+	// BatchSize is URLs per purge request (Cloudflare Free plan: 100).
+	BatchSize int `yaml:"batch_size"`
+	// URLsPerSecond paces purge requests (Cloudflare Free plan: 800 per
+	// account, as a moving average).
+	URLsPerSecond int `yaml:"urls_per_second"`
+	// EverythingOver purges the whole zone instead when more URLs changed.
+	EverythingOver int `yaml:"everything_over"`
+}
+
 type Deploy struct {
 	CloudflarePages *CloudflarePages `yaml:"cloudflare_pages"`
+	R2              *R2              `yaml:"r2"`
+
+	// ForceUpload re-uploads every file to R2 whatever its checksum, so
+	// metadata such as Content-Type is rewritten (set from the command line).
+	ForceUpload bool `yaml:"-"`
+	// AllowMassDelete lifts R2's max_delete_fraction guard for one run (set
+	// from the command line).
+	AllowMassDelete bool `yaml:"-"`
 }
+
+// Any reports whether a deploy target is configured.
+func (d Deploy) Any() bool { return d.CloudflarePages != nil || d.R2 != nil }
 
 type Config struct {
 	Vault    string   `yaml:"vault"`
@@ -215,6 +263,37 @@ func (c *Config) ApplyDefaults() {
 			cf.APIToken = "env:CLOUDFLARE_API_TOKEN"
 		}
 	}
+	if r := c.Deploy.R2; r != nil {
+		if r.AccountID == "" && r.Endpoint == "" {
+			r.AccountID = "env:CLOUDFLARE_ACCOUNT_ID"
+		}
+		if r.AccessKeyID == "" {
+			r.AccessKeyID = "env:R2_ACCESS_KEY_ID"
+		}
+		if r.SecretAccessKey == "" {
+			r.SecretAccessKey = "env:R2_SECRET_ACCESS_KEY"
+		}
+		if r.Concurrency == 0 {
+			r.Concurrency = 64
+		}
+		if r.MaxDeleteFraction == 0 {
+			r.MaxDeleteFraction = 0.25
+		}
+		if p := r.Purge; p != nil {
+			if p.APIToken == "" {
+				p.APIToken = "env:CLOUDFLARE_PURGE_TOKEN"
+			}
+			if p.BatchSize == 0 {
+				p.BatchSize = 100
+			}
+			if p.URLsPerSecond == 0 {
+				p.URLsPerSecond = 800
+			}
+			if p.EverythingOver == 0 {
+				p.EverythingOver = 5000
+			}
+		}
+	}
 	if sp := c.Site.Support; sp != nil {
 		if len(sp.Amounts) == 0 {
 			sp.Amounts = DefaultSupportAmounts
@@ -286,6 +365,9 @@ func (c *Config) Validate() error {
 			errs = append(errs, errors.New("deploy.cloudflare_pages needs the html target"))
 		}
 	}
+	if r := c.Deploy.R2; r != nil {
+		errs = append(errs, r.validate(c)...)
+	}
 	notePaths := map[string]string{"site.about": c.Site.About}
 	if sp := c.Site.Support; sp != nil {
 		notePaths["site.support.page"] = sp.Page
@@ -353,4 +435,75 @@ func simpleSlug(s string) string {
 		}
 	}
 	return strings.TrimRight(b.String(), "-")
+}
+
+var (
+	cloudflareIDRe = regexp.MustCompile(`^[0-9a-f]{32}$`)
+	bucketRe       = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
+)
+
+// IsCloudflareID reports whether s looks like a Cloudflare account or zone
+// ID: 32 lowercase hex digits.
+func IsCloudflareID(s string) bool { return cloudflareIDRe.MatchString(s) }
+
+func (r *R2) validate(c *Config) []error {
+	var errs []error
+	if !bucketRe.MatchString(r.Bucket) {
+		errs = append(errs, errors.New("deploy.r2.bucket must be a bucket name (3-63 lowercase letters, digits, dots and hyphens)"))
+	}
+	switch {
+	case r.Endpoint != "":
+		if err := ValidateEndpoint(r.Endpoint); err != nil {
+			errs = append(errs, fmt.Errorf("deploy.r2.endpoint: %w", err))
+		}
+	case r.AccountID == "":
+		errs = append(errs, errors.New("deploy.r2 needs account_id or endpoint"))
+	case !secret.IsReference(r.AccountID) && !IsCloudflareID(r.AccountID):
+		errs = append(errs, errors.New("deploy.r2.account_id must be a 32-character lowercase hex account ID, or an op:// or env: reference"))
+	}
+	for _, k := range []struct{ name, v string }{{"access_key_id", r.AccessKeyID}, {"secret_access_key", r.SecretAccessKey}} {
+		if !secret.IsReference(k.v) {
+			errs = append(errs, fmt.Errorf(`deploy.r2.%s must be an "op://" or "env:" reference, not the value itself`, k.name))
+		}
+	}
+	if r.Concurrency < 1 {
+		errs = append(errs, errors.New("deploy.r2.concurrency must be at least 1"))
+	}
+	if r.MaxDeleteFraction <= 0 || r.MaxDeleteFraction > 1 {
+		errs = append(errs, errors.New("deploy.r2.max_delete_fraction must be above 0 and at most 1"))
+	}
+	if c.Target != "html" {
+		errs = append(errs, errors.New("deploy.r2 needs the html target"))
+	}
+	if p := r.Purge; p != nil {
+		if !IsCloudflareID(p.ZoneID) {
+			errs = append(errs, errors.New("deploy.r2.purge.zone_id must be a 32-character lowercase hex Cloudflare zone ID"))
+		}
+		if !secret.IsReference(p.APIToken) {
+			errs = append(errs, errors.New(`deploy.r2.purge.api_token must be an "op://" or "env:" reference, not the token itself`))
+		}
+		if p.BatchSize < 1 || p.EverythingOver < 1 || p.URLsPerSecond < 1 {
+			errs = append(errs, errors.New("deploy.r2.purge.batch_size, urls_per_second and everything_over must be at least 1"))
+		}
+		if !strings.HasPrefix(c.Site.BaseURL, "https://") && !strings.HasPrefix(c.Site.BaseURL, "http://") {
+			errs = append(errs, errors.New("deploy.r2.purge needs an absolute site.base_url to name the URLs to purge"))
+		}
+	}
+	return errs
+}
+
+// ValidateEndpoint accepts only an https URL naming a host: no path, query,
+// fragment or credentials.
+func ValidateEndpoint(endpoint string) error {
+	u, err := url.Parse(endpoint)
+	// The value is not echoed: it could carry credentials (user:pass@).
+	switch {
+	case err != nil:
+		return errors.New("not a URL")
+	case u.Scheme != "https":
+		return errors.New("must be an https:// URL")
+	case u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.Trim(u.Path, "/") != "":
+		return errors.New("must be a scheme and host only, with no path, query or credentials")
+	}
+	return nil
 }
