@@ -155,7 +155,7 @@ const RunnerEnv = "OBSIDIAN_PUBLISH_TOOLS_RUNNER"
 // Load reads a config file, expands paths relative to the file's directory,
 // applies defaults (and $OBSIDIAN_PUBLISH_TOOLS_RUNNER) and validates.
 func Load(file string) (*Config, error) {
-	f, err := os.Open(file)
+	f, err := os.Open(file) // #nosec G304 -- the config file the user named
 	if err != nil {
 		return nil, err
 	}
@@ -271,6 +271,9 @@ func (c *Config) Validate() error {
 	case "docker", "host", "":
 	default:
 		errs = append(errs, fmt.Errorf("tools.runner %q must be docker or host", c.Tools.Runner))
+	}
+	if strings.HasPrefix(c.Tools.Image, "-") { // passed to docker as an argument
+		errs = append(errs, fmt.Errorf("tools.image %q must be an image name", c.Tools.Image))
 	}
 	if cf := c.Deploy.CloudflarePages; cf != nil {
 		if cf.Project == "" {

@@ -145,6 +145,7 @@ func TestValidateToolsAndDeploy(t *testing.T) {
 	t.Setenv(RunnerEnv, "")
 	for body, want := range map[string]string{
 		"tools: {runner: podman}\n":                                                        "tools.runner",
+		"tools: {image: --privileged}\n":                                                   "tools.image",
 		"deploy: {cloudflare_pages: {}}\n":                                                 "deploy.cloudflare_pages.project",
 		"deploy: {cloudflare_pages: {project: p, api_token: abc123}}\n":                    "api_token must be",
 		"target: hugo\ndeploy: {cloudflare_pages: {project: p}}\n":                         "html target",

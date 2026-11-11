@@ -74,7 +74,7 @@ func (host) Run(ctx context.Context, s Spec) (string, error) {
 	for i, a := range s.Args {
 		args[i] = strings.ReplaceAll(a, SitePlaceholder, s.Site)
 	}
-	cmd := exec.CommandContext(ctx, s.Tool, args...)
+	cmd := exec.CommandContext(ctx, s.Tool, args...) // #nosec G204 -- s.Tool is one of our fixed tool names; no shell
 	cmd.Env = append(os.Environ(), envList(s.Env)...)
 	cmd.Env = append(cmd.Env, envList(s.Secrets)...)
 	return run(cmd, s.Tool)
@@ -93,7 +93,7 @@ func (*docker) Check(string) error {
 }
 
 // secretsShim exports NAME=value lines from stdin, then runs the tool.
-const secretsShim = `while IFS= read -r l; do export "$l"; done; exec "$@"`
+const secretsShim = `while IFS= read -r l; do export "$l"; done; exec "$@"` // #nosec G101 -- a shell snippet, not a credential
 
 func (d *docker) Run(ctx context.Context, s Spec) (string, error) {
 	image, err := d.ensureImage(ctx)
@@ -140,6 +140,7 @@ func (d *docker) ensureImage(ctx context.Context) (string, error) {
 	if image == "" {
 		image = ImageTag()
 	}
+	// #nosec G204 -- image is the built-in tag or tools.image, which config rejects if it starts with "-"
 	if d.ready || exec.CommandContext(ctx, "docker", "image", "inspect", image).Run() == nil {
 		d.ready = true
 		return image, nil
@@ -147,7 +148,7 @@ func (d *docker) ensureImage(ctx context.Context) (string, error) {
 	if d.image != "" {
 		return "", fmt.Errorf("docker image %s not found (tools.image)", image)
 	}
-	cmd := exec.CommandContext(ctx, "docker", "build", "--network", "host", "-t", image, "-")
+	cmd := exec.CommandContext(ctx, "docker", "build", "--network", "host", "-t", image, "-") // #nosec G204 -- as above
 	cmd.Stdin = bytes.NewReader(dockerfile)
 	if _, err := run(cmd, "docker build"); err != nil {
 		return "", err

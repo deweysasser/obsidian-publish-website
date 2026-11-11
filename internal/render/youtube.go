@@ -30,25 +30,25 @@ func (ir imageRenderer) render(w util.BufWriter, src []byte, node ast.Node, ente
 			if !ir.r.embeddable(id) {
 				class = "yt noembed"
 			}
-			w.WriteString(`<span class="` + class + `" data-yt="` + id + `"><a href="`)
-			w.Write(util.EscapeHTML(util.URLEscape(n.Destination, true)))
-			w.WriteString(`"><img src="https://i.ytimg.com/vi/` + id + `/hqdefault.jpg" alt="`)
-			w.Write(alt)
-			w.WriteString(`" loading="lazy"><span class="yt-play" aria-hidden="true"></span></a></span>`)
+			_, _ = w.WriteString(`<span class="` + class + `" data-yt="` + id + `"><a href="`)
+			_, _ = w.Write(util.EscapeHTML(util.URLEscape(n.Destination, true)))
+			_, _ = w.WriteString(`"><img src="https://i.ytimg.com/vi/` + id + `/hqdefault.jpg" alt="`)
+			_, _ = w.Write(alt)
+			_, _ = w.WriteString(`" loading="lazy"><span class="yt-play" aria-hidden="true"></span></a></span>`)
 			return ast.WalkSkipChildren, nil
 		}
 	}
-	w.WriteString(`<img src="`)
-	w.Write(util.EscapeHTML(util.URLEscape(n.Destination, true)))
-	w.WriteString(`" alt="`)
-	w.Write(alt)
-	w.WriteByte('"')
+	_, _ = w.WriteString(`<img src="`)
+	_, _ = w.Write(util.EscapeHTML(util.URLEscape(n.Destination, true)))
+	_, _ = w.WriteString(`" alt="`)
+	_, _ = w.Write(alt)
+	_ = w.WriteByte('"')
 	if n.Title != nil {
-		w.WriteString(` title="`)
-		w.Write(util.EscapeHTML(n.Title))
-		w.WriteByte('"')
+		_, _ = w.WriteString(` title="`)
+		_, _ = w.Write(util.EscapeHTML(n.Title))
+		_ = w.WriteByte('"')
 	}
-	w.WriteByte('>')
+	_ = w.WriteByte('>')
 	return ast.WalkSkipChildren, nil
 }
 

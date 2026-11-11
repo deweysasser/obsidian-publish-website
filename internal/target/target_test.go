@@ -20,3 +20,15 @@ func TestExportFrontmatterTimestamps(t *testing.T) {
 		t.Errorf("nested %v", got["nested"])
 	}
 }
+
+func TestWriteFileStaysInsideDir(t *testing.T) {
+	dir := t.TempDir()
+	for _, rel := range []string{"../escape.html", "a/../../escape.html", "/abs.html"} {
+		if err := WriteFile(dir, rel, []byte("x")); err == nil {
+			t.Errorf("%q: written", rel)
+		}
+	}
+	if err := WriteFile(dir, "a/b/ok.html", []byte("x")); err != nil {
+		t.Errorf("ok path: %v", err)
+	}
+}

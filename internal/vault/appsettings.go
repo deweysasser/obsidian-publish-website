@@ -10,7 +10,7 @@ import (
 // from .obsidian/app.json. Missing or unreadable settings mean Obsidian's
 // default, false.
 func StrictLineBreaks(dir string) bool {
-	data, err := os.ReadFile(filepath.Join(dir, ".obsidian", "app.json"))
+	data, err := os.ReadFile(filepath.Join(dir, ".obsidian", "app.json")) // #nosec G304 -- inside the configured vault
 	if err != nil {
 		return false
 	}

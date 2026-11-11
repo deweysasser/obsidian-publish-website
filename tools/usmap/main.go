@@ -70,7 +70,7 @@ func main() {
 func readShapes(files []string) (map[string]shape, map[string]string) {
 	shapes, census := map[string]shape{}, map[string]string{}
 	for _, file := range files {
-		b, err := os.ReadFile(file)
+		b, err := os.ReadFile(file) // #nosec G304 -- an input file named on the command line
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -199,7 +199,7 @@ func writeMap(files []string, out string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := os.WriteFile(out, append(j, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(out, append(j, '\n'), 0o644); err != nil { // #nosec G306 -- generated data, committed to the repo
 		log.Fatal(err)
 	}
 	fmt.Printf("wrote %s (%d bytes)\n", out, len(j))
@@ -335,7 +335,7 @@ func writePlaces(files []string, out string) {
 		}
 	}
 	for _, file := range files {
-		f, err := os.Open(file)
+		f, err := os.Open(file) // #nosec G304 -- an input file named on the command line
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -409,14 +409,16 @@ func writePlaces(files []string, out string) {
 		if err := sc.Err(); err != nil {
 			log.Fatal(err)
 		}
-		f.Close()
+		if err := f.Close(); err != nil {
+			log.Fatal(err)
+		}
 	}
 	keys := make([]string, 0, len(best))
 	for k := range best {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	fh, err := os.Create(out)
+	fh, err := os.Create(out) // #nosec G304 -- the output file named on the command line
 	if err != nil {
 		log.Fatal(err)
 	}

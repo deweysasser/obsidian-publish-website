@@ -102,7 +102,7 @@ func FindNode() (string, error) {
 	if err != nil {
 		return "", errors.New(`dataview queries need Node.js >= 18 on PATH (https://nodejs.org); install it or set "dataview: none" to render queries as placeholders`)
 	}
-	out, err := exec.Command(p, "--version").Output()
+	out, err := exec.Command(p, "--version").Output() // #nosec G204 -- node from PATH, fixed argument
 	if err != nil {
 		return "", fmt.Errorf("running %s --version: %w", p, err)
 	}
@@ -118,7 +118,7 @@ func FindNode() (string, error) {
 
 // LoadSettings reads the vault's Dataview plugin settings (empty if absent).
 func LoadSettings(vaultRoot string) (map[string]any, error) {
-	b, err := os.ReadFile(filepath.Join(vaultRoot, ".obsidian", "plugins", "dataview", "data.json"))
+	b, err := os.ReadFile(filepath.Join(vaultRoot, ".obsidian", "plugins", "dataview", "data.json")) // #nosec G304 -- inside the configured vault
 	if errors.Is(err, os.ErrNotExist) {
 		return map[string]any{}, nil
 	}
@@ -200,11 +200,13 @@ func (e *Engine) run(in Input) (map[string]Result, error) {
 	}
 	defer os.Remove(f.Name())
 	if _, err := f.Write(bridgeJS); err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, err
 	}
-	f.Close()
-	cmd := exec.Command(e.Node, f.Name())
+	if err := f.Close(); err != nil {
+		return nil, err
+	}
+	cmd := exec.Command(e.Node, f.Name()) // #nosec G204 -- node found by FindNode; our own temp file
 	cmd.Stdin = bytes.NewReader(payload)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
