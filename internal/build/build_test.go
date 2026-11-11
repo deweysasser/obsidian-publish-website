@@ -294,3 +294,25 @@ func TestYouTubeCheckSuccessIsQuiet(t *testing.T) {
 		t.Errorf("err %v warnings %v", err, rep.Warnings)
 	}
 }
+
+// A vault note may link to a generated page with a root-relative link, such
+// as the suggestion form; it passes through unchanged and isn't a broken link.
+func TestRootRelativeLinkToGeneratedPage(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "R"), 0o755)
+	os.WriteFile(filepath.Join(dir, "R", "a.md"), []byte("[ask for one](/suggest/?kind=other&page=/a/)\n"), 0o644)
+	out := filepath.Join(t.TempDir(), "o")
+	cfg := &config.Config{Vault: dir, Root: "R", Output: out, Search: "none", Dataview: "none",
+		Site: config.Site{BaseURL: "https://x.io/", Suggest: &config.Suggest{Endpoint: "/api/suggest"}}}
+	cfg.ApplyDefaults()
+	rep, err := Run(cfg, zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Warnings) != 0 {
+		t.Errorf("warnings %v", rep.Warnings)
+	}
+	if page := read(t, filepath.Join(out, "a/index.html")); !strings.Contains(page, `<a href="/suggest/?kind=other&amp;page=/a/">ask for one</a>`) {
+		t.Errorf("link changed:\n%s", page)
+	}
+}

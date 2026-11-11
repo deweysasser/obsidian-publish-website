@@ -136,7 +136,7 @@ func LinksInLine(masked string, line int) []Link {
 		}
 		raw := masked[m[6]:m[7]]
 		tgt := strings.TrimSuffix(strings.TrimPrefix(raw, "<"), ">")
-		if SchemeRe.MatchString(tgt) || strings.HasPrefix(tgt, "#") || tgt == "" {
+		if SchemeRe.MatchString(tgt) || strings.HasPrefix(tgt, "#") || tgt == "" || siteURL(tgt) {
 			continue
 		}
 		l := Link{Raw: raw, Display: masked[m[4]:m[5]], Embed: m[3] > m[2], Markdown: true, Line: line}
@@ -372,4 +372,12 @@ func walkStrings(v any, f func(string)) {
 			walkStrings(x[k], f)
 		}
 	}
+}
+
+// siteURL reports whether a root-relative link target is a URL on the
+// published site (a generated page such as /tags/ or /suggest/?kind=x)
+// rather than a vault note: note names can't contain '?' (Obsidian forbids
+// it), and a note path never ends in '/'. Such links are kept as written.
+func siteURL(tgt string) bool {
+	return strings.HasPrefix(tgt, "/") && (strings.Contains(tgt, "?") || strings.HasSuffix(tgt, "/"))
 }

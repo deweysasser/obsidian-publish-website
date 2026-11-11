@@ -7,6 +7,9 @@
 {{- if .Description}}
 <meta name="description" content="{{.Description}}">
 {{- end}}
+{{- if .NoIndex}}
+<meta name="robots" content="noindex">
+{{- end}}
 {{- if .Canonical}}
 <link rel="canonical" href="{{.Canonical}}">
 {{- end}}
@@ -32,6 +35,9 @@
 {{- end}}
 {{- if .Math}}
 <link rel="stylesheet" href="{{.Base}}assets/vendor/katex/katex.min.css">
+{{- end}}
+{{- if .PageStyle}}
+<link rel="stylesheet" href="{{.PageStyle}}">
 {{- end}}
 </head>
 <body>
@@ -64,7 +70,7 @@
       {{- end}}
       {{.Content}}
     </article>
-    {{- if or .Backlinks .Modified}}
+    {{- if or .Backlinks .Modified .SuggestLinks}}
     <footer class="page-footer" data-pagefind-ignore="all">
       {{- if .Backlinks}}
       <section class="backlinks">
@@ -73,6 +79,7 @@
       </section>
       {{- end}}
       {{- if .Modified}}<p class="modified">Last modified {{.Modified}}</p>{{end}}
+      {{- if .SuggestLinks}}<p class="suggest-links">{{range $i, $l := .SuggestLinks}}{{if $i}} · {{end}}<a href="{{$l.URL}}">{{$l.Name}}</a>{{end}}</p>{{end}}
     </footer>
     {{- end}}
     {{- if or .About .Support}}
@@ -90,6 +97,9 @@
   {{- end}}
 </div>
 <script src="{{.Script}}" defer></script>
+{{- if .PageScript}}
+<script src="{{.PageScript}}" defer></script>
+{{- end}}
 {{- if .Search}}
 <script src="{{.Base}}pagefind/pagefind-ui.js"></script>
 <script>window.addEventListener("DOMContentLoaded",function(){new PagefindUI({element:"#search",showSubResults:true,showImages:false});});</script>

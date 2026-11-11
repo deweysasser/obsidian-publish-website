@@ -122,6 +122,9 @@ site:
     monthly:                           # optional: PayPal Subscriptions plans (create one per amount)
       - {amount: 5, plan_id: P-1AB23456CD789012E}
     paypal_client_id: AbC…             # optional: live PayPal REST app client ID; adds a "towns" box to the monthly plans
+  suggest:                             # optional: a suggestion form at /suggest/, and links to it on every page
+    endpoint: /api/suggest             # a path on this site; see "Suggestion form"
+    # kinds: […]                       # default: one kind, "Suggest a change"
 html:
   template_dir: ./templates            # optional: override layout.html
 hugo:
@@ -268,6 +271,58 @@ REST app on the account that owns the plans; it is public by design (the
 browser needs it), so never put the app's secret here. PayPal's script loads
 only when someone picks an amount; without JavaScript, or if it fails to
 load, the amounts work as plain subscribe links, without the towns.
+
+### Suggestion form
+
+With `site.suggest`, every page ends with a link per kind of suggestion
+(by default just **Suggest a change**) to a form at `/suggest/`, which
+carries the page's path along. The form needs a small service at
+`endpoint`, on the same site; the generator itself holds no secrets:
+
+- `GET {endpoint}` returns `{"turnstile_site_key": "…"}`, a
+  [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/) site
+  key. The form renders the anti-spam widget with it, so a key rotation
+  needs no rebuild.
+- `POST {endpoint}` receives the form as `multipart/form-data`: `kind`,
+  `page`, `message`, `contact`, each kind's own fields, and
+  `cf-turnstile-response`. It answers `{"ok": true}`, or
+  `{"ok": false, "error": "…"}` with a message to show the visitor.
+
+What it does with a suggestion is up to the service: file an issue, send an
+email, and so on.
+
+Declare other kinds of suggestion in the config. The list replaces the
+default, so include `Suggest a change` if you still want it:
+
+```yaml
+site:
+  suggest:
+    endpoint: /api/suggest
+    kinds:
+      - id: correction                   # sent as "kind": lowercase letters, digits, -
+        link: Suggest a change           # the link text on every page
+        title: Suggest a change to this page   # the form heading (default: link)
+        message: required                # required (default) | optional | none
+      - id: event
+        link: Tell us about an event
+        message: optional
+        message_label: Anything else?    # default "Message"
+        fields:                          # extra single-line inputs
+          - {name: event_name, label: Event, required: true, maxlength: 100}
+          - {name: event_date, label: Date, maxlength: 40}   # maxlength default 200, at most 5000
+```
+
+Every kind also gets `page` (the path the visitor came from, read-only),
+an optional `contact` ("Only if you'd like a reply. It's never
+published."), and the Turnstile widget. `kind`, `page`, `message`, `contact`
+and `cf-turnstile-response` can't be used as field names. The form page is
+`noindex` and stays out of the sitemap and search. It needs JavaScript,
+because Turnstile does. Without `site.suggest`, the output is exactly as
+before.
+
+A note can link to the form directly: `[tell us](/suggest/?kind=event)`.
+Root-relative links that end in `/` or carry a query are treated as site
+URLs and kept as written.
 
 ### YouTube embeds
 

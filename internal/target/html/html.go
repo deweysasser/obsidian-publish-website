@@ -85,7 +85,11 @@ func New(cfg *config.Config) (*Target, error) {
 	}
 	t.tmpl = tmpl
 	t.versioned, t.notes = map[string]string{}, map[string]*tagLink{}
-	for _, name := range []string{"style.css", "app.js"} {
+	names := []string{"style.css", "app.js"}
+	if cfg.Site.Suggest != nil {
+		names = append(names, "suggest.css", "suggest.js")
+	}
+	for _, name := range names {
 		b, err := assetFS.ReadFile("assets/" + name)
 		if err != nil {
 			return nil, err
@@ -122,6 +126,12 @@ type view struct {
 	// site-wide links in the sidebar and footer; "" when not configured
 	// site-wide links to the about and support notes, by their titles
 	About, Support *tagLink
+	// SuggestLinks are the site.suggest links at the bottom of the page.
+	SuggestLinks []tagLink
+	// NoIndex asks search engines to leave the page out.
+	NoIndex bool
+	// PageStyle and PageScript are assets only this page loads.
+	PageStyle, PageScript string
 }
 
 func (t *Target) write(s *target.Site, slug string, v view, current string) error {
@@ -148,6 +158,9 @@ func (t *Target) write(s *target.Site, slug string, v view, current string) erro
 		t.nav = newNav(s.Tree)
 	}
 	v.Nav = t.nav.html(current)
+	if s.Config.Site.Suggest != nil && slug != notFoundSlug && slug != suggestSlug {
+		v.SuggestLinks = t.suggestLinks(t.scheme.PageURL(slug))
+	}
 	v.Math = strings.Contains(string(v.Content), `class="math`)
 	v.Mermaid = strings.Contains(string(v.Content), `class="mermaid"`)
 	var buf bytes.Buffer
@@ -171,7 +184,7 @@ var reserved = map[string]bool{"tags": true, "assets": true, "pagefind": true}
 
 // WritePage writes one note page.
 func (t *Target) WritePage(s *target.Site, p *render.Page) error {
-	if top, _, _ := strings.Cut(p.Slug, "/"); reserved[top] {
+	if top, _, _ := strings.Cut(p.Slug, "/"); reserved[top] || top == suggestSlug && s.Config.Site.Suggest != nil {
 		return fmt.Errorf("%s: its URL /%s/ is reserved for generated pages in the html target; rename the note or folder", p.SourcePath, top)
 	}
 	// #nosec G203 -- rendered Markdown; raw HTML in a note is deliberately kept (the vault is the author's)
@@ -224,6 +237,12 @@ func (t *Target) Finalize(s *target.Site) error {
 	if err := t.write(s, notFoundSlug, view{Title: "Not found", Content: template.HTML(`<p>That page does not exist. Try the <a href="` + template.HTMLEscapeString(t.base) + `">home page</a> or search.</p>`)}, ""); err != nil {
 		return err
 	}
+	if sg := s.Config.Site.Suggest; sg != nil {
+		if err := t.write(s, suggestSlug, view{Title: suggestTitle(sg), Content: suggestForm(sg), NoIndex: true,
+			PageStyle: t.base + t.versioned["suggest.css"], PageScript: t.base + t.versioned["suggest.js"]}, ""); err != nil {
+			return err
+		}
+	}
 	if err := target.WriteFile(t.out, ".nojekyll", nil); err != nil {
 		return err
 	}
@@ -235,6 +254,9 @@ func (t *Target) Finalize(s *target.Site) error {
 	if err := fs.WalkDir(assetFS, "assets", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
+		}
+		if strings.HasPrefix(p, "assets/suggest.") && s.Config.Site.Suggest == nil {
+			return nil // only published with site.suggest
 		}
 		b, err := assetFS.ReadFile(p)
 		if err != nil {

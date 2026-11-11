@@ -273,3 +273,46 @@ func TestSupportMonthly(t *testing.T) {
 		t.Errorf("monthly %+v", m)
 	}
 }
+
+func TestSuggestDefaultsAndValidation(t *testing.T) {
+	c, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: {suggest: {endpoint: /api/suggest}}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k := c.Site.Suggest.Kinds; len(k) != 1 || k[0].ID != "correction" || k[0].Link != "Suggest a change" ||
+		k[0].Title != "Suggest a change" || k[0].Message != "required" || k[0].MessageLabel != "Message" {
+		t.Errorf("default kinds %+v", k)
+	}
+	c, err = Load(writeConfig(t, "vault: /v\nroot: R\nsite: {suggest: {endpoint: /api/suggest, kinds: [{id: other, link: L, fields: [{name: f, label: F}]}]}}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k := c.Site.Suggest.Kinds; len(k) != 1 || k[0].ID != "other" || k[0].Fields[0].MaxLength != 200 || k[0].Title != "L" {
+		t.Errorf("given kinds replace the default, with defaults filled: %+v", k)
+	}
+
+	for body, want := range map[string]string{
+		"{endpoint: api/suggest}":                                                                       "site.suggest.endpoint",
+		"{endpoint: \"https://evil.example/x\"}":                                                        "site.suggest.endpoint",
+		"{endpoint: \"//evil.example/x\"}":                                                              "site.suggest.endpoint",
+		"{endpoint: \"/api/suggest?x=1\"}":                                                              "site.suggest.endpoint",
+		"{}":                                                                                            "site.suggest.endpoint",
+		"{endpoint: /s, kinds: [{id: Bad_ID, link: L}]}":                                                "kinds[0].id",
+		"{endpoint: /s, kinds: [{id: a, link: L}, {id: a, link: M}]}":                                   "used twice",
+		"{endpoint: /s, kinds: [{id: a}]}":                                                              "kinds[0].link",
+		"{endpoint: /s, kinds: [{id: a, link: L, message: maybe}]}":                                     "kinds[0].message",
+		"{endpoint: /s, kinds: [{id: a, link: L, fields: [{name: page, label: P}]}]}":                   "built into every kind",
+		"{endpoint: /s, kinds: [{id: a, link: L, fields: [{name: contact, label: P}]}]}":                "built into every kind",
+		"{endpoint: /s, kinds: [{id: a, link: L, fields: [{name: 9x, label: P}]}]}":                     "fields[0].name",
+		"{endpoint: /s, kinds: [{id: a, link: L, fields: [{name: x, label: P}, {name: x, label: Q}]}]}": "used twice",
+		"{endpoint: /s, kinds: [{id: a, link: L, fields: [{name: x}]}]}":                                "fields[0].label",
+		"{endpoint: /s, kinds: [{id: a, link: L, fields: [{name: x, label: X, maxlength: 5001}]}]}":     "maxlength",
+	} {
+		if _, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: {suggest: "+body+"}\n")); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err %v, want %q", body, err, want)
+		}
+	}
+	if _, err := Load(writeConfig(t, "vault: /v\nroot: R\ntarget: hugo\nsite: {suggest: {endpoint: /s}}\n")); err == nil || !strings.Contains(err.Error(), "html target") {
+		t.Errorf("hugo target: %v", err)
+	}
+}
