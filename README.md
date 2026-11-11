@@ -430,6 +430,26 @@ Some tests skip unless their dependencies are available:
   until those goldens exist.
 - `tools/vendor.sh` refreshes vendored KaTeX/Mermaid.
 
+### Browser scripts
+
+The html target's scripts are TypeScript in `web/src/`, compiled to
+`internal/target/html/assets/` and embedded in the binary. The compiled
+`.js` is committed, because `go install` can't run the compiler; CI fails
+if it doesn't match the sources.
+
+```bash
+make web          # compile web/src/*.ts into the assets
+make web-test     # type-check and run web/test (Node's test runner + happy-dom)
+make web-check    # both, then fail if the committed assets are out of date
+```
+
+npm and Node run only in a container (Docker, the Node image pinned in
+`internal/tools/Dockerfile`), never on the host. `npm ci` installs from the
+lockfile with install scripts disabled (`web/.npmrc`); compiling and testing
+run with no network. To add or update a dependency, pick a release at least
+two weeks old:
+`docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD/web":/web -w /web <node image> npm install --save-dev --before=<date> <package>`.
+
 Project scaffolding comes from
 [golang-program](https://github.com/deweysasser/golang-program).
 

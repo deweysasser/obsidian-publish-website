@@ -1,0 +1,16 @@
+{
+  "name": "obsidian-publish-website-web",
+  "private": true,
+  "description": "TypeScript sources for the html target's browser scripts. Built and tested in a container: make web, make web-test.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "happy-dom": "21.0.4",
+    "typescript": "7.0.2"
+  }
+}

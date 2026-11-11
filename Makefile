@@ -58,6 +58,28 @@ test:
 vet:
 	go vet ./...
 
+# Browser scripts: TypeScript in web/src, compiled to the embedded assets in
+# internal/target/html/assets (committed, since go install can't run tsc).
+# npm and node only ever run in a container: the same pinned image as the
+# tools Dockerfile, as your user, with the network on only for npm ci.
+NODE_IMAGE ?= $(shell awk '/^FROM node:/ {print $$2; exit}' internal/tools/Dockerfile)
+WEB_RUN = $(DOCKER) run --rm --user $(shell id -u):$(shell id -g) -e HOME=/tmp -v "$(CURDIR)":/src -w /src/web
+WEB_OFFLINE = $(WEB_RUN) --network none $(NODE_IMAGE)
+
+.PHONY: web web-test web-check
+web/node_modules/.package-lock.json: web/package.json web/package-lock.json
+	$(WEB_RUN) $(NODE_IMAGE) npm ci
+
+web: web/node_modules/.package-lock.json ## compile web/src/*.ts into the embedded assets
+	$(WEB_OFFLINE) npx tsc -p tsconfig.json
+
+web-test: web ## type-check and run the browser-script tests
+	$(WEB_OFFLINE) sh -c 'npx tsc -p tsconfig.test.json && node --test test/*.test.ts'
+
+web-check: web-test ## fail if the committed assets don't match web/src
+	git diff --exit-code -- internal/target/html/assets/
+	@! git status --porcelain --untracked-files=all -- internal/target/html/assets/ | grep '^??' || { echo "untracked compiled assets: commit them"; exit 1; }
+
 changelog: CHANGELOG.md
 CHANGELOG.md: .chglog/config.yml
 	git chglog $(LAST_RELEASE) >$@
