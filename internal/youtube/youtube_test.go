@@ -25,6 +25,9 @@ func TestID(t *testing.T) {
 		"https://example.com/watch?v=abcdefghijk":            "",
 		"javascript:alert(1)":                                "",
 		"https://youtu.be/short":                             "",
+		// 11-character words that aren't videos
+		"https://www.youtube.com/embed/live_stream?channel=UCN4YHY9Svp-Hn-qoPNiVXCw": "",
+		"https://www.youtube.com/embed/videoseries?list=PL1":                         "",
 	} {
 		u, _ := url.Parse(in)
 		if got := ID(u); got != want {
@@ -139,5 +142,32 @@ func TestCheckerCountsWhatTimeoutLeftUnasked(t *testing.T) {
 	res := c.Prefetch(ctx, ids)
 	if res.Asked != 20 || res.Failed != 20 || res.Unknown != 20 {
 		t.Errorf("result %+v: every video should be counted as unknown", res)
+	}
+}
+
+// A 400 is YouTube's answer for a URL it can't embed: refused and cached,
+// not a failed lookup that warns on every build.
+func TestCheckerBadRequestIsAnAnswer(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+	cache := filepath.Join(t.TempDir(), "yt.json")
+	c := NewChecker(cache)
+	c.Endpoint = srv.URL
+	res := c.Prefetch(context.Background(), []string{"badbadbad11"})
+	if res.Failed != 0 || res.Refused != 1 || c.Embeddable("badbadbad11") {
+		t.Errorf("result %+v, embeddable %v: want refused, not failed", res, c.Embeddable("badbadbad11"))
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	c2 := NewChecker(cache)
+	c2.Endpoint = srv.URL
+	c2.Prefetch(context.Background(), []string{"badbadbad11"})
+	if calls.Load() != 1 {
+		t.Errorf("%d lookups: the answer wasn't cached", calls.Load())
 	}
 }

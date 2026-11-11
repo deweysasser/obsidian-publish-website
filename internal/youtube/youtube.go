@@ -18,6 +18,11 @@ import (
 
 var idRe = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
 
+// notVideos are /embed/ path words that fit the 11-character ID alphabet
+// but aren't videos: a channel's current live stream
+// (/embed/live_stream?channel=…) and a playlist (/embed/videoseries?list=…).
+var notVideos = map[string]bool{"live_stream": true, "videoseries": true}
+
 // ID returns the video id of a YouTube watch, short, live, shorts or embed
 // URL, or "".
 func ID(u *url.URL) string {
@@ -40,7 +45,7 @@ func ID(u *url.URL) string {
 			}
 		}
 	}
-	if !idRe.MatchString(id) {
+	if !idRe.MatchString(id) || notVideos[id] {
 		return ""
 	}
 	return id
@@ -180,7 +185,9 @@ func (c *Checker) ask(ctx context.Context, id string) (bool, error) {
 	switch resp.StatusCode {
 	case http.StatusOK:
 		return true, nil
-	case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
+	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
+		// YouTube's answer: it won't embed this (400: not a URL it can
+		// embed at all). Cached like any answer, so it isn't asked again.
 		return false, nil
 	}
 	return false, fmt.Errorf("oEmbed answered HTTP %d", resp.StatusCode)
