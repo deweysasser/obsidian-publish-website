@@ -121,6 +121,7 @@ site:
     currency: USD                      # default
     monthly:                           # optional: PayPal Subscriptions plans (create one per amount)
       - {amount: 5, plan_id: P-1AB23456CD789012E}
+    paypal_client_id: AbC…             # optional: live PayPal REST app client ID; adds a "towns" box to the monthly plans
 html:
   template_dir: ./templates            # optional: override layout.html
 hugo:
@@ -257,6 +258,16 @@ fenced `support` block (leave the block empty), the build fills in a
 button for each `site.support` amount (a PayPal.me link) and each monthly
 plan (a PayPal Subscriptions link). Set `site.support.page` to the note to
 link it, by its title, from every page.
+
+With `site.support.paypal_client_id` set, the monthly plans become a small
+form instead: a free-text box ("Towns you'd like us to cover") and PayPal's
+subscribe button, which stores the text (up to 127 characters, folded to
+ASCII) on the subscription as its `custom_id`, where it shows in the
+subscription's details and in PayPal's API. Use the client ID of a **live**
+REST app on the account that owns the plans; it is public by design (the
+browser needs it), so never put the app's secret here. PayPal's script loads
+only when someone picks an amount; without JavaScript, or if it fails to
+load, the amounts work as plain subscribe links, without the towns.
 
 ### YouTube embeds
 

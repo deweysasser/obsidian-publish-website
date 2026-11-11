@@ -139,4 +139,70 @@
       line.classList.add("playing");
     }
   });
+  // Monthly support (a ```support block with site.support.paypal_client_id):
+  // the amount links choose a plan, and PayPal's subscribe button stores the
+  // free-text towns on the subscription as its custom_id. PayPal's script is
+  // loaded only once someone picks an amount; if it can't load, the links go
+  // back to being plain subscribe links (without the towns).
+  var sm = document.querySelector(".support-monthly[data-paypal-client]");
+  if (sm) {
+    var towns = sm.querySelector(".support-towns");
+    var slot = sm.querySelector(".support-paypal");
+    var status = sm.querySelector(".support-status");
+    var plan = null, sdk = null;
+    var say = function (msg) { status.textContent = msg; status.hidden = !msg; };
+    // PayPal allows 127 characters in custom_id. Keep printable ASCII,
+    // folding accented letters ("Española" becomes "Espanola").
+    var customID = function () {
+      return (towns.value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^\x20-\x7e]/g, "").replace(/\s+/g, " ").trim().slice(0, 127);
+    };
+    var loadSDK = function () {
+      if (!sdk) {
+        sdk = new Promise(function (ok, fail) {
+          var s = document.createElement("script");
+          s.src = "https://www.paypal.com/sdk/js?client-id=" + encodeURIComponent(sm.dataset.paypalClient) +
+            "&vault=true&intent=subscription&components=buttons";
+          s.onload = function () { if (window.paypal && window.paypal.Buttons) ok(window.paypal); else fail(); };
+          s.onerror = fail;
+          document.head.appendChild(s);
+        });
+      }
+      return sdk;
+    };
+    sm.addEventListener("click", function (e) {
+      var a = e.target.closest && e.target.closest("a[data-plan]");
+      if (!a || sm.dataset.fallback) return;
+      e.preventDefault();
+      plan = a.dataset.plan;
+      sm.querySelectorAll("a[data-plan]").forEach(function (x) {
+        x.classList.toggle("selected", x === a);
+        if (x === a) x.setAttribute("aria-current", "true"); else x.removeAttribute("aria-current");
+      });
+      say("");
+      loadSDK().then(function (paypal) {
+        slot.hidden = false;
+        if (slot.dataset.ready) return; // one button; it reads the plan chosen last
+        slot.dataset.ready = "1";
+        paypal.Buttons({
+          style: { label: "subscribe" },
+          createSubscription: function (data, actions) {
+            var o = { plan_id: plan }, c = customID();
+            if (c) o.custom_id = c;
+            return actions.subscription.create(o);
+          },
+          onApprove: function () {
+            slot.hidden = true;
+            say("Thank you! Your monthly support is set up. You can cancel it at any time from your PayPal account.");
+          },
+          onError: function () {
+            say("PayPal couldn't start the subscription. Please try again, or use the amount link.");
+          }
+        }).render(slot);
+      }, function () {
+        sm.dataset.fallback = "1";
+        say("PayPal's button couldn't load. Choose an amount again to subscribe on PayPal's site (the towns won't be included).");
+      });
+    });
+  }
 })();

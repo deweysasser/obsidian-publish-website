@@ -255,6 +255,8 @@ func TestSupportDefaultsAndValidation(t *testing.T) {
 		"{support: {paypal_me: a, currency: usd}}":    "currency",
 		"{support: {paypal_me: a, amounts: [0]}}":     "amounts",
 		"{support: {paypal_me: a, amounts: [1.005]}}": "amounts",
+		"{support: {paypal_me: a, paypal_client_id: \"bad id!\", monthly: [{amount: 2, plan_id: P-2AB}]}}": "paypal_client_id",
+		"{support: {paypal_me: a, paypal_client_id: AbC-123_xyzAbC-123_xyz}}":                              "needs site.support.monthly",
 	} {
 		if _, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: "+body+"\n")); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: err %v, want %q", body, err, want)
