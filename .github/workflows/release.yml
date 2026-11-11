@@ -131,6 +131,8 @@ jobs:
             ghcr.io/${{env.REPO}}:${{env.TAG}} build --strict
           test -f "$RUNNER_TEMP/work/site/issues/road-repair/index.html"
           test -d "$RUNNER_TEMP/work/site/pagefind"
+          # The Go program's HTTPS (R2, purge API, YouTube) needs the system CA bundle.
+          docker run --rm --entrypoint test ghcr.io/${{env.REPO}}:${{env.TAG}} -s /etc/ssl/certs/ca-certificates.crt
 
       - name: Push
         run: docker push ghcr.io/${{env.REPO}}:${{env.TAG}}
