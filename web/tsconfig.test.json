@@ -1,0 +1,17 @@
+{
+  // Type-checks the tests (run by Node's test runner, which strips types).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // Only files with import/export are modules, so src/*.ts stay scripts
+    // even under NodeNext and "type": "module".
+    "moduleDetection": "legacy",
+    "rootDir": ".",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["src/*.ts", "test/*.ts"]
+}

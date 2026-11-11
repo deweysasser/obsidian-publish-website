@@ -25,6 +25,11 @@ jobs:
       - name: Vet
         run: make vet
 
+      # Builds and tests the TypeScript in a container, and fails if the
+      # committed browser assets don't match their sources.
+      - name: Browser scripts
+        run: make web-check
+
       - name: Test
         run: make test
 
