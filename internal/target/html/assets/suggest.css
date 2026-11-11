@@ -1,0 +1,19 @@
+/* The suggestion form at /suggest/ (site.suggest); loaded only on that page. */
+.suggest-form { max-width: 36rem; }
+.suggest-form fieldset { border: 0; padding: 0; margin: 0 0 1rem; }
+.suggest-form legend { font-weight: 600; margin-bottom: .4rem; }
+.suggest-form fieldset label { display: block; margin: .2rem 0; }
+.suggest-form p { margin: 0 0 1rem; }
+.suggest-form p > label { display: block; font-weight: 600; margin-bottom: .3rem; }
+.suggest-form input[type=text], .suggest-form input[type=email], .suggest-form textarea {
+  width: 100%; padding: .45rem .6rem; border: 1px solid var(--border); border-radius: 6px; font: inherit;
+  background: var(--bg); color: inherit;
+}
+.suggest-form input[readonly] { background: var(--bg-alt); color: var(--muted); }
+.suggest-form .hint { display: block; color: var(--muted); font-size: .85em; margin-top: .25rem; }
+.suggest-form button { padding: .5rem 1.2rem; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.suggest-form button:disabled { opacity: .5; cursor: default; }
+.suggest-turnstile { margin: 0 0 1rem; min-height: 65px; }
+.suggest-status { font-weight: 600; }
+.suggest-status.error { color: #b3261e; }
+.suggest-noscript { font-weight: 600; }

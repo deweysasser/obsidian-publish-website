@@ -37,7 +37,55 @@ type Site struct {
 	// Support configures PayPal payment links: the ```support block, and a
 	// link to the support note from every page (html target).
 	Support *Support `yaml:"support"`
+	// Suggest, when set, publishes a suggestion form at /suggest/ and puts a
+	// link per kind of suggestion at the bottom of every page (html target).
+	// The form posts to Endpoint, a service on the same site (see the
+	// README); the generator itself holds no secrets.
+	Suggest *Suggest `yaml:"suggest"`
 }
+
+// Suggest configures the suggestion form.
+type Suggest struct {
+	// Endpoint is the same-origin path the form talks to: GET returns
+	// {"turnstile_site_key": ...}; POST takes the form fields.
+	Endpoint string `yaml:"endpoint"`
+	// Kinds are the kinds of suggestion, in order: one link each on every
+	// page, and one form. Default: the single kind DefaultSuggestKind.
+	Kinds []SuggestKind `yaml:"kinds"`
+}
+
+// SuggestKind is one kind of suggestion. Its ID is sent as the "kind"
+// field; every kind also gets "page" (the path the visitor came from),
+// "contact" and the Turnstile widget.
+type SuggestKind struct {
+	ID    string `yaml:"id"`
+	Link  string `yaml:"link"`  // the link text at the bottom of every page
+	Title string `yaml:"title"` // the form's heading; default Link
+	// Message is "required" (default), "optional" or "none": the free-text
+	// message box, labelled MessageLabel (default "Message").
+	Message      string         `yaml:"message"`
+	MessageLabel string         `yaml:"message_label"`
+	Fields       []SuggestField `yaml:"fields"` // extra single-line inputs
+}
+
+// SuggestField is an extra single-line text input on a kind's form.
+type SuggestField struct {
+	Name      string `yaml:"name"`
+	Label     string `yaml:"label"`
+	Required  bool   `yaml:"required"`
+	MaxLength int    `yaml:"maxlength"` // default 200, at most 5000
+}
+
+// DefaultSuggestKind is the kind a site gets when it lists none.
+var DefaultSuggestKind = SuggestKind{ID: "correction", Link: "Suggest a change", Message: "required"}
+
+// suggestReserved are field names every kind already has.
+var suggestReserved = map[string]bool{"kind": true, "page": true, "message": true, "contact": true, "cf-turnstile-response": true}
+
+var (
+	suggestKindID    = regexp.MustCompile(`^[a-z0-9-]+$`)
+	suggestFieldName = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+)
 
 // Support configures the payment links a ```support block renders: one
 // PayPal.me link per amount (use the PayPal.me name of the account to be
@@ -302,6 +350,9 @@ func (c *Config) ApplyDefaults() {
 			}
 		}
 	}
+	if sg := c.Site.Suggest; sg != nil {
+		sg.applyDefaults()
+	}
 	if sp := c.Site.Support; sp != nil {
 		if len(sp.Amounts) == 0 {
 			sp.Amounts = DefaultSupportAmounts
@@ -384,6 +435,15 @@ func (c *Config) Validate() error {
 		if a != "" && (path.IsAbs(a) || path.Clean(a) != a || strings.HasPrefix(a, "..")) {
 			errs = append(errs, fmt.Errorf("%s %q must be a clean path relative to root", name, a))
 		}
+	}
+	if sg := c.Site.Suggest; sg != nil {
+		if err := validSamePath(sg.Endpoint); err != nil {
+			errs = append(errs, fmt.Errorf("site.suggest.endpoint %q %w", sg.Endpoint, err))
+		}
+		if c.Target != "html" {
+			errs = append(errs, errors.New("site.suggest needs the html target"))
+		}
+		errs = append(errs, sg.validateKinds()...)
 	}
 	if sp := c.Site.Support; sp != nil {
 		if !paypalMeName.MatchString(sp.PayPalMe) {
@@ -522,4 +582,84 @@ func ValidateEndpoint(endpoint string) error {
 		return errors.New("must be a scheme and host only, with no path, query or credentials")
 	}
 	return nil
+}
+
+// validSamePath accepts an absolute path on this site ("/api/suggest"): no
+// scheme, host, query or fragment, and not protocol-relative ("//host").
+func validSamePath(p string) error {
+	u, err := url.Parse(p)
+	switch {
+	case p == "":
+		return errors.New("is required")
+	case err != nil, u.Scheme != "", u.Host != "", u.User != nil, u.RawQuery != "", u.Fragment != "",
+		!strings.HasPrefix(p, "/"), strings.HasPrefix(p, "//"), strings.ContainsAny(p, " \t\n\"'<>`\\"):
+		return errors.New("must be a path on this site, like /api/suggest")
+	}
+	return nil
+}
+
+func (sg *Suggest) applyDefaults() {
+	if len(sg.Kinds) == 0 {
+		sg.Kinds = []SuggestKind{DefaultSuggestKind}
+	}
+	for i := range sg.Kinds {
+		k := &sg.Kinds[i]
+		if k.Title == "" {
+			k.Title = k.Link
+		}
+		if k.Message == "" {
+			k.Message = "required"
+		}
+		if k.MessageLabel == "" {
+			k.MessageLabel = "Message"
+		}
+		for j := range k.Fields {
+			if k.Fields[j].MaxLength == 0 {
+				k.Fields[j].MaxLength = 200
+			}
+		}
+	}
+}
+
+func (sg *Suggest) validateKinds() []error {
+	var errs []error
+	ids := map[string]bool{}
+	for i, k := range sg.Kinds {
+		at := fmt.Sprintf("site.suggest.kinds[%d]", i)
+		switch {
+		case !suggestKindID.MatchString(k.ID):
+			errs = append(errs, fmt.Errorf("%s.id %q must be lowercase letters, digits and -", at, k.ID))
+		case ids[k.ID]:
+			errs = append(errs, fmt.Errorf("%s.id %q is used twice", at, k.ID))
+		}
+		ids[k.ID] = true
+		if strings.TrimSpace(k.Link) == "" {
+			errs = append(errs, fmt.Errorf("%s.link is required", at))
+		}
+		switch k.Message {
+		case "required", "optional", "none":
+		default:
+			errs = append(errs, fmt.Errorf("%s.message %q must be required, optional or none", at, k.Message))
+		}
+		names := map[string]bool{}
+		for j, f := range k.Fields {
+			fat := fmt.Sprintf("%s.fields[%d]", at, j)
+			switch {
+			case suggestReserved[f.Name]:
+				errs = append(errs, fmt.Errorf("%s.name %q is built into every kind", fat, f.Name))
+			case !suggestFieldName.MatchString(f.Name):
+				errs = append(errs, fmt.Errorf("%s.name %q must start with a letter: lowercase letters, digits and _", fat, f.Name))
+			case names[f.Name]:
+				errs = append(errs, fmt.Errorf("%s.name %q is used twice", fat, f.Name))
+			}
+			names[f.Name] = true
+			if strings.TrimSpace(f.Label) == "" {
+				errs = append(errs, fmt.Errorf("%s.label is required", fat))
+			}
+			if f.MaxLength < 1 || f.MaxLength > 5000 {
+				errs = append(errs, fmt.Errorf("%s.maxlength %d must be between 1 and 5000", fat, f.MaxLength))
+			}
+		}
+	}
+	return errs
 }

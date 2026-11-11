@@ -152,3 +152,18 @@ func TestParseWikilinkEscapedPipe(t *testing.T) {
 		t.Errorf("%+v", l)
 	}
 }
+
+func TestSiteURLsAreNotVaultLinks(t *testing.T) {
+	for in, want := range map[string]int{
+		"[a](/suggest/?kind=x&page=/a/)": 0, // a generated page, with a query
+		"[a](/tags/)":                    0, // a generated page
+		"[a](/)":                         0, // the home page
+		"[a](/Some%20Note)":              1, // a vault-root note path: still resolved (and reported if broken)
+		"[a](/Some%20Note.md)":           1,
+		"[a](notes/b.md)":                1,
+	} {
+		if got := len(LinksInLine(in, 1)); got != want {
+			t.Errorf("%s: %d links, want %d", in, got, want)
+		}
+	}
+}
