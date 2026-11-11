@@ -1,14 +1,18 @@
 package build
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/deweysasser/obsidian-publish-website/internal/config"
 	"github.com/deweysasser/obsidian-publish-website/internal/dataview"
+	"github.com/deweysasser/obsidian-publish-website/internal/youtube"
 	"github.com/rs/zerolog"
 )
 
@@ -237,5 +241,56 @@ func TestTagsOff(t *testing.T) {
 		if s := read(t, filepath.Join(out, f)); strings.Contains(s, `class="tag"`) || strings.Contains(s, "/tags/") || strings.Contains(s, "#civic") {
 			t.Errorf("%s still shows tags", f)
 		}
+	}
+}
+
+// youtubeVault is a one-note vault linking a YouTube video, with the oEmbed
+// endpoint pointed at srv and a private cache.
+func youtubeVault(t *testing.T, endpoint string) *config.Config {
+	t.Helper()
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "R"), 0o755)
+	os.WriteFile(filepath.Join(dir, "R", "a.md"), []byte("---\nvideo: https://www.youtube.com/watch?v=abcdefghijk\n---\nA meeting.\n"), 0o644)
+	t.Setenv("XDG_CACHE_HOME", t.TempDir()) // os.UserCacheDir on Linux
+	old := youtube.Endpoint
+	youtube.Endpoint = endpoint
+	t.Cleanup(func() { youtube.Endpoint = old })
+	cfg := &config.Config{Vault: dir, Root: "R", Output: filepath.Join(t.TempDir(), "o"), Search: "none", Dataview: "none", Site: config.Site{BaseURL: "https://x.io/"}}
+	cfg.ApplyDefaults()
+	return cfg
+}
+
+func TestYouTubeCheckFailureIsABuildWarning(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("relies on XDG_CACHE_HOME for a private cache")
+	}
+	// A TLS server the build doesn't trust: the failure a container without
+	// a CA bundle had on every lookup.
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	defer srv.Close()
+	cfg := youtubeVault(t, srv.URL)
+	rep, err := Run(cfg, zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Warnings) != 1 || !strings.Contains(rep.Warnings[0], "1 of 1 YouTube videos") || !strings.Contains(rep.Warnings[0], "certificate") {
+		t.Errorf("warnings %v", rep.Warnings)
+	}
+	cfg.Strict = true
+	if _, err := Run(cfg, zerolog.Nop()); err == nil || !strings.Contains(err.Error(), "YouTube") {
+		t.Errorf("--strict: err %v", err)
+	}
+}
+
+func TestYouTubeCheckSuccessIsQuiet(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("relies on XDG_CACHE_HOME for a private cache")
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(401) }))
+	defer srv.Close()
+	cfg := youtubeVault(t, srv.URL)
+	rep, err := Run(cfg, zerolog.Nop())
+	if err != nil || len(rep.Warnings) != 0 {
+		t.Errorf("err %v warnings %v", err, rep.Warnings)
 	}
 }

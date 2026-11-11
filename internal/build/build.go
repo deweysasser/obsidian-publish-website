@@ -93,7 +93,7 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 	r.HiddenTag = cfg.Site.TagHidden
 	r.Support = cfg.Site.Support
 	if cfg.Target == "html" {
-		r.YouTubeEmbeddable = youtubeEmbeds(ix, pub, log)
+		r.YouTubeEmbeddable = youtubeEmbeds(ix, pub, warn, log)
 	}
 	if err := evaluateDataview(cfg, r, ix, log); err != nil {
 		return nil, err
@@ -212,8 +212,12 @@ func evaluateDataview(cfg *config.Config, r *render.Renderer, ix *index.Index, l
 var mdImageRe = regexp.MustCompile(`!\[[^\]]*\]\(\s*<?([^)\s>]+)`)
 
 // youtubeEmbeds finds the YouTube videos the published notes refer to and asks
-// YouTube which may be embedded (cached; failures count as embeddable).
-func youtubeEmbeds(ix *index.Index, pub *selector.Published, log zerolog.Logger) func(string) bool {
+// YouTube which may be embedded (cached; failures count as embeddable). A
+// failed lookup with no cached answer is a build warning: that video is
+// rendered as an embed without knowing it may be, so the page may be wrong.
+// A failed re-check of a cached answer only logs, since the build still uses
+// the cached answer.
+func youtubeEmbeds(ix *index.Index, pub *selector.Published, warn func(string), log zerolog.Logger) func(string) bool {
 	seen := map[string]bool{}
 	var ids []string
 	add := func(id string) {
@@ -241,12 +245,20 @@ func youtubeEmbeds(ix *index.Index, pub *selector.Published, log zerolog.Logger)
 	if len(ids) > 0 {
 		start := time.Now()
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		c.Prefetch(ctx, ids)
+		res := c.Prefetch(ctx, ids)
 		cancel()
 		if err := c.Save(); err != nil {
 			log.Warn().Err(err).Msg("Could not save YouTube embed cache")
 		}
-		log.Info().Int("videos", len(ids)).Func(timing.Elapsed(start)).Msg("Checked YouTube embedding")
+		log.Info().Int("videos", len(ids)).Int("checked", res.Asked).Int("refused", res.Refused).Int("failed", res.Failed).
+			Func(timing.Elapsed(start)).Msg("Checked YouTube embedding")
+		switch {
+		case res.Unknown > 0:
+			warn(fmt.Sprintf("could not check whether %d of %d YouTube videos may be embedded (%d lookups failed; first error: %v); "+
+				"they are rendered as embeds, and any that refuse will show as a link", res.Unknown, len(ids), res.Failed, res.Err))
+		case res.Failed > 0:
+			log.Warn().Err(res.Err).Int("failed", res.Failed).Msg("Could not re-check some YouTube videos; using their cached answers")
+		}
 	}
 	return c.Embeddable
 }
