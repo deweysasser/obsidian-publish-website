@@ -50,6 +50,11 @@ type Support struct {
 	Currency string    `yaml:"currency"`
 	// Monthly are PayPal Subscriptions plans, one per monthly amount.
 	Monthly []MonthlyPlan `yaml:"monthly"`
+	// PayPalClientID, the client ID of a live PayPal REST app on the paid
+	// account, turns the monthly links into PayPal's subscribe button, with
+	// a free-text "towns" box whose text is stored on the subscription
+	// (custom_id). It is public: the browser needs it. Never the secret.
+	PayPalClientID string `yaml:"paypal_client_id"`
 }
 
 // MonthlyPlan is a PayPal Subscriptions plan offered at a monthly amount.
@@ -65,6 +70,9 @@ var (
 	paypalMeName = regexp.MustCompile(`^[A-Za-z0-9]{1,20}$`)
 	currencyCode = regexp.MustCompile(`^[A-Z]{3}$`)
 	paypalPlanID = regexp.MustCompile(`^P-[A-Z0-9]+$`)
+	// paypalClientID is the shape of a PayPal REST client ID (80-odd
+	// characters of letters, digits, '-' and '_').
+	paypalClientID = regexp.MustCompile(`^[A-Za-z0-9_-]{20,128}$`)
 )
 
 func validAmount(a float64) bool { return a > 0 && math.Round(a*100) == a*100 }
@@ -395,6 +403,14 @@ func (c *Config) Validate() error {
 			}
 			if !paypalPlanID.MatchString(m.PlanID) {
 				errs = append(errs, fmt.Errorf("site.support.monthly: plan_id %q must be a PayPal plan ID like P-1AB23456CD789012E", m.PlanID))
+			}
+		}
+		if sp.PayPalClientID != "" {
+			if !paypalClientID.MatchString(sp.PayPalClientID) {
+				errs = append(errs, errors.New("site.support.paypal_client_id must be a PayPal REST app client ID (letters, digits, - and _)"))
+			}
+			if len(sp.Monthly) == 0 {
+				errs = append(errs, errors.New("site.support.paypal_client_id needs site.support.monthly plans"))
 			}
 		}
 	}

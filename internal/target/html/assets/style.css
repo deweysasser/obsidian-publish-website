@@ -57,6 +57,12 @@ a:hover { text-decoration: underline; }
 .support-amounts { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: .6rem; }
 .support-amounts a { display: inline-block; min-width: 4rem; text-align: center; padding: .45rem .9rem; border: 1px solid var(--accent); border-radius: 6px; color: var(--accent); font-weight: 600; }
 .support-amounts a:hover { background: var(--accent); color: #fff; text-decoration: none; }
+.support-amounts a.selected { background: var(--accent); color: #fff; }
+.support-towns-label { display: block; margin-bottom: .3rem; }
+.support-towns-label .small-text { color: var(--muted); font-size: .85em; }
+.support-towns { width: 100%; max-width: 32rem; padding: .45rem .6rem; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+.support-paypal { max-width: 24rem; margin-top: .8rem; }
+.support-status { font-weight: 600; }
 .content { padding: 1.5rem 2.5rem 4rem; max-width: 52rem; width: 100%; overflow-wrap: break-word; }
 .breadcrumbs { list-style: none; padding: 0; margin: 0 0 .5rem; display: flex; flex-wrap: wrap; font-size: .85rem; color: var(--muted); }
 .breadcrumbs li + li::before { content: "›"; margin: 0 .4rem; }
