@@ -63,6 +63,9 @@ func (r *Renderer) townDots(m *usmap.Map, targets map[string]child) string {
 			}
 			sort.Strings(names)
 			for _, k := range names {
+				if !r.isPlace(towns[k]) {
+					continue
+				}
 				if lat, lon, ok := r.townLocation(towns[k], reg.Code); ok {
 					x, y := reg.Proj.Point(lon, lat)
 					b.WriteString(`<circle cx="` + num1(x) + `" cy="` + num1(y) + `" r="6"/>`)
@@ -131,6 +134,9 @@ func (r *Renderer) statemapBlock(code string, line int, ctx Context) (string, er
 	}
 	var dots []dot
 	for _, c := range r.children(folder) {
+		if !r.isPlace(c) {
+			continue
+		}
 		lat, lon, ok := r.townLocation(c, reg.Code)
 		if !ok {
 			r.Warn(ctx.Path, line, fmt.Sprintf("statemap: no location for %q (add coordinates: [lat, lon] to its page)", c.name))
@@ -190,6 +196,25 @@ func (r *Renderer) statemapBlock(code string, line int, ctx Context) (string, er
 	}
 	b.WriteString("</svg></figure>\n")
 	return "\n" + b.String(), nil
+}
+
+// isPlace reports whether a map plots c: always without a PlaceTag,
+// otherwise only when its page has that tag or one nested under it.
+func (r *Renderer) isPlace(c child) bool {
+	want := strings.ToLower(strings.TrimPrefix(r.PlaceTag, "#"))
+	if want == "" {
+		return true
+	}
+	pg := r.Ix.Pages[c.note]
+	if pg == nil {
+		return false
+	}
+	for _, t := range pg.Tags { // includes the parents of nested tags
+		if strings.ToLower(strings.TrimPrefix(t, "#")) == want {
+			return true
+		}
+	}
+	return false
 }
 
 // townLocation reads a town page's "coordinates" frontmatter ([lat, lon]

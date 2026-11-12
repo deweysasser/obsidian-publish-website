@@ -92,6 +92,9 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 	r.StrictLineBreaks = vault.StrictLineBreaks(cfg.Vault)
 	r.HiddenTag = cfg.Site.TagHidden
 	r.Support = cfg.Site.Support
+	if mp := cfg.Site.Maps; mp != nil {
+		r.PlaceTag = mp.PlaceTag
+	}
 	if cfg.Target == "html" {
 		r.YouTubeEmbeddable = youtubeEmbeds(ix, pub, warn, log)
 	}

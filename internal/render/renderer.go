@@ -52,6 +52,9 @@ type Renderer struct {
 	HiddenTag func(tag string) bool
 	// Support configures ```support blocks (nil: they render nothing).
 	Support *config.Support
+	// PlaceTag, when set, limits the places usmap and statemap plot to
+	// pages with this tag ('#' optional; nested tags count).
+	PlaceTag string
 
 	fenceHooks map[string]FenceHook
 	inlineHook func(code string, line int, ctx Context) (string, bool)

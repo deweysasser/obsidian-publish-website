@@ -42,6 +42,17 @@ type Site struct {
 	// The form posts to Endpoint, a service on the same site (see the
 	// README); the generator itself holds no secrets.
 	Suggest *Suggest `yaml:"suggest"`
+	// Maps configures the usmap and statemap blocks.
+	Maps *Maps `yaml:"maps"`
+}
+
+// Maps configures the usmap and statemap blocks.
+type Maps struct {
+	// PlaceTag, when set, limits the places a map plots to pages with this
+	// tag (or a tag nested under it); other notes and folders beside them,
+	// such as topic pages, are left off without a warning. Empty: every
+	// published subfolder and note is a place.
+	PlaceTag string `yaml:"place_tag"`
 }
 
 // Suggest configures the suggestion form.
@@ -139,6 +150,12 @@ func (s Site) TagHidden(tag string) bool {
 		}
 	}
 	return false
+}
+
+// validTag reports whether t (with or without '#') could be an Obsidian tag.
+func validTag(t string) bool {
+	t = strings.TrimPrefix(t, "#")
+	return t != "" && !strings.ContainsAny(t, " \t\n,#") && !strings.HasPrefix(t, "/") && !strings.HasSuffix(t, "/")
 }
 
 type Hugo struct {
@@ -435,6 +452,9 @@ func (c *Config) Validate() error {
 		if a != "" && (path.IsAbs(a) || path.Clean(a) != a || strings.HasPrefix(a, "..")) {
 			errs = append(errs, fmt.Errorf("%s %q must be a clean path relative to root", name, a))
 		}
+	}
+	if mp := c.Site.Maps; mp != nil && mp.PlaceTag != "" && !validTag(mp.PlaceTag) {
+		errs = append(errs, fmt.Errorf("site.maps.place_tag %q must be a tag (no spaces, '#' optional)", mp.PlaceTag))
 	}
 	if sg := c.Site.Suggest; sg != nil {
 		if err := validSamePath(sg.Endpoint); err != nil {

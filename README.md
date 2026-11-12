@@ -250,6 +250,17 @@ gazetteer (New England towns, then incorporated places, counties and
 census-designated places). Towns that can't be placed are reported as
 warnings.
 
+When a state folder also holds pages that aren't places (topic pages, a
+"Common Issues" folder), tag the place pages and name the tag; the maps
+then plot only pages with it (or a tag nested under it) and skip the rest
+without a warning. The town dots on the `usmap` follow the same rule:
+
+```yaml
+site:
+  maps:
+    place_tag: municipality
+```
+
 The shapes and place locations are embedded in the binary (Census Bureau
 cartographic boundaries and gazetteer, public domain);
 `tools/usmap/build.sh` regenerates them.

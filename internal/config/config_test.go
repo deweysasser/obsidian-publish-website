@@ -316,3 +316,19 @@ func TestSuggestDefaultsAndValidation(t *testing.T) {
 		t.Errorf("hugo target: %v", err)
 	}
 }
+
+func TestMapsPlaceTag(t *testing.T) {
+	c, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite:\n  maps:\n    place_tag: municipality\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Site.Maps == nil || c.Site.Maps.PlaceTag != "municipality" {
+		t.Errorf("maps %+v", c.Site.Maps)
+	}
+	for tag, ok := range map[string]bool{"municipality": true, "#place/town": true, "": true, "two words": false, "a,b": false, "#": false, "x/": false, "/x": false} {
+		c := &Config{Vault: "/v", Root: "R", Target: "html", Search: "none", Site: Site{Maps: &Maps{PlaceTag: tag}}}
+		if err := c.Validate(); (err == nil) != ok {
+			t.Errorf("place_tag %q: err %v", tag, err)
+		}
+	}
+}
