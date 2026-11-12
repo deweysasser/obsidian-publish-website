@@ -176,3 +176,53 @@ func TestUSMapShowsTownDots(t *testing.T) {
 		}
 	}
 }
+
+// placeTagRenderer is a state folder that also holds pages that aren't
+// places, with the places tagged.
+func placeTagRenderer(t *testing.T) (*Renderer, *[]warning) {
+	t.Helper()
+	dir := t.TempDir()
+	writeFile(t, dir, "Town/Town.md", "home")
+	writeFile(t, dir, "Town/US/Massachusetts/Massachusetts.md", "```statemap\n```\n")
+	writeFile(t, dir, "Town/US/Massachusetts/Boston/Boston.md", "---\ntags: [municipality]\n---\n")
+	writeFile(t, dir, "Town/US/Massachusetts/Worcester.md", "---\ntags: [Municipality/City]\n---\n") // nested, any case
+	writeFile(t, dir, "Town/US/Massachusetts/Atlantis/Atlantis.md", "---\ntags: [municipality]\n---\n")
+	writeFile(t, dir, "Town/US/Massachusetts/Common Issues/Common Issues.md", "---\ntags: [common-issue]\n---\n")
+	writeFile(t, dir, "Town/US/Massachusetts/Housing Policy.md", "---\ntags: [state-policy]\ncoordinates: [42.36, -71.06]\n---\n")
+	writeFile(t, dir, "Town/US/Massachusetts/Notes/x.md", "a folder with no folder note")
+	r, warns := newTestRenderer(t, dir, ModeHTML)
+	r.PlaceTag = "#municipality"
+	return r, warns
+}
+
+func TestStateMapPlaceTag(t *testing.T) {
+	r, warns := placeTagRenderer(t)
+	out := pre(t, r, "```statemap\nUS/Massachusetts\n```\n")
+	for _, town := range []string{"Boston", "Worcester"} {
+		if !strings.Contains(out, "<title>"+town+"</title><circle ") {
+			t.Errorf("no dot for %s", town)
+		}
+	}
+	for _, other := range []string{"Common Issues", "Housing Policy", "Notes", "Atlantis"} {
+		if strings.Contains(out, "<title>"+other+"</title>") {
+			t.Errorf("%s isn't a placeable place but got a dot", other)
+		}
+	}
+	// The tagged town with no location still warns; the untagged pages don't.
+	if len(*warns) != 1 || !strings.Contains((*warns)[0].msg, "Atlantis") {
+		t.Errorf("want one warning about Atlantis, got %v", *warns)
+	}
+}
+
+func TestUSMapTownDotsFollowPlaceTag(t *testing.T) {
+	r, _ := placeTagRenderer(t)
+	out := pre(t, r, "```usmap\nUS\n```\n")
+	g := regexp.MustCompile(`<g class="towns" aria-hidden="true">(.*?)</g>`).FindStringSubmatch(out)
+	if g == nil {
+		t.Fatal("no town layer")
+	}
+	// Boston and Worcester; not the policy page, though it has coordinates.
+	if n := strings.Count(g[1], "<circle "); n != 2 {
+		t.Errorf("%d town dots, want 2", n)
+	}
+}
