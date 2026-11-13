@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -44,6 +45,78 @@ type Site struct {
 	Suggest *Suggest `yaml:"suggest"`
 	// Maps configures the usmap and statemap blocks.
 	Maps *Maps `yaml:"maps"`
+	// SecurityTxt, when set, publishes /.well-known/security.txt (RFC 9116)
+	// telling security researchers how to report a problem (html target).
+	SecurityTxt *SecurityTxt `yaml:"security_txt"`
+}
+
+// SecurityTxt configures /.well-known/security.txt. Its Expires field is
+// written as the build date plus ExpiresDays, so a site rebuilt regularly
+// never publishes a stale file.
+type SecurityTxt struct {
+	// Contact is how to report a vulnerability, in order of preference:
+	// https:, mailto: or tel: URIs. At least one is required.
+	Contact []string `yaml:"contact"`
+	// ExpiresDays is how long after each build the file stays valid.
+	// Default 180; at most 365, as RFC 9116 recommends.
+	ExpiresDays int `yaml:"expires_days"`
+	// Policy is an optional https: URL of the site's disclosure policy.
+	Policy string `yaml:"policy"`
+	// PreferredLanguages is an optional comma-separated list of language
+	// tags, such as "en, es".
+	PreferredLanguages string `yaml:"preferred_languages"`
+}
+
+// DefaultSecurityTxtDays is SecurityTxt.ExpiresDays when unset.
+const DefaultSecurityTxtDays = 180
+
+var languageTags = regexp.MustCompile(`^[A-Za-z]{1,8}(-[A-Za-z0-9]{1,8})*(\s*,\s*[A-Za-z]{1,8}(-[A-Za-z0-9]{1,8})*)*$`)
+
+func (st *SecurityTxt) validate(c *Config) []error {
+	var errs []error
+	if len(st.Contact) == 0 {
+		errs = append(errs, errors.New("site.security_txt.contact needs at least one https:, mailto: or tel: URI"))
+	}
+	for _, ct := range st.Contact {
+		if err := validSecurityURI(ct, "https", "mailto", "tel"); err != nil {
+			errs = append(errs, fmt.Errorf("site.security_txt.contact %q %w", ct, err))
+		}
+	}
+	if st.Policy != "" {
+		if err := validSecurityURI(st.Policy, "https"); err != nil {
+			errs = append(errs, fmt.Errorf("site.security_txt.policy %q %w", st.Policy, err))
+		}
+	}
+	if st.PreferredLanguages != "" && !languageTags.MatchString(st.PreferredLanguages) {
+		errs = append(errs, fmt.Errorf("site.security_txt.preferred_languages %q must be language tags separated by commas, like \"en, es\"", st.PreferredLanguages))
+	}
+	if st.ExpiresDays < 1 || st.ExpiresDays > 365 {
+		errs = append(errs, fmt.Errorf("site.security_txt.expires_days %d must be from 1 to 365", st.ExpiresDays))
+	}
+	if c.Target != "html" {
+		errs = append(errs, errors.New("site.security_txt needs the html target"))
+	}
+	// RFC 9116: only /.well-known/security.txt at the host's root counts.
+	if u, err := url.Parse(c.Site.BaseURL); err == nil && strings.Trim(u.Path, "/") != "" {
+		errs = append(errs, fmt.Errorf("site.security_txt needs a site at the root of its host: base_url %q has a path, so the file would not be at /.well-known/security.txt", c.Site.BaseURL))
+	}
+	return errs
+}
+
+// validSecurityURI accepts an absolute URI with one of the schemes, on one
+// line (security.txt is line-oriented).
+func validSecurityURI(s string, schemes ...string) error {
+	want := strings.Join(schemes, ":, ") + ":"
+	u, err := url.Parse(s)
+	switch {
+	case err != nil, strings.ContainsAny(s, "\r\n"):
+		return fmt.Errorf("must be a URI (%s)", want)
+	case !slices.Contains(schemes, u.Scheme):
+		return fmt.Errorf("must start with %s", want)
+	case u.Scheme == "https" && u.Host == "", u.Scheme != "https" && u.Opaque == "":
+		return fmt.Errorf("is not a complete %s: URI", u.Scheme)
+	}
+	return nil
 }
 
 // Maps configures the usmap and statemap blocks.
@@ -370,6 +443,9 @@ func (c *Config) ApplyDefaults() {
 	if sg := c.Site.Suggest; sg != nil {
 		sg.applyDefaults()
 	}
+	if st := c.Site.SecurityTxt; st != nil && st.ExpiresDays == 0 {
+		st.ExpiresDays = DefaultSecurityTxtDays
+	}
 	if sp := c.Site.Support; sp != nil {
 		if len(sp.Amounts) == 0 {
 			sp.Amounts = DefaultSupportAmounts
@@ -464,6 +540,9 @@ func (c *Config) Validate() error {
 			errs = append(errs, errors.New("site.suggest needs the html target"))
 		}
 		errs = append(errs, sg.validateKinds()...)
+	}
+	if st := c.Site.SecurityTxt; st != nil {
+		errs = append(errs, st.validate(c)...)
 	}
 	if sp := c.Site.Support; sp != nil {
 		if !paypalMeName.MatchString(sp.PayPalMe) {

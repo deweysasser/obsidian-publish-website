@@ -332,3 +332,35 @@ func TestMapsPlaceTag(t *testing.T) {
 		}
 	}
 }
+
+func TestSecurityTxtDefaultsAndValidation(t *testing.T) {
+	c, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: {base_url: \"https://x.io/\", security_txt: {contact: [\"https://x.io/suggest/\", \"mailto:a@x.io\", \"tel:+1-555-0100\"]}}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st := c.Site.SecurityTxt; st.ExpiresDays != DefaultSecurityTxtDays || len(st.Contact) != 3 {
+		t.Errorf("defaults %+v", st)
+	}
+	for body, want := range map[string]string{
+		"{}":                                                      "needs at least one",
+		"{contact: [\"/suggest/\"]}":                              "must start with https:",
+		"{contact: [\"http://x.io/\"]}":                           "must start with https:",
+		"{contact: [\"https:///x\"]}":                             "not a complete https: URI",
+		"{contact: [\"mailto:\"]}":                                "not a complete mailto: URI",
+		"{contact: [\"https://x.io/\\nExpires: 1\"]}":             "site.security_txt.contact",
+		"{contact: [\"tel:1\"], policy: \"mailto:x\"}":            "site.security_txt.policy",
+		"{contact: [\"tel:1\"], expires_days: 400}":               "expires_days",
+		"{contact: [\"tel:1\"], expires_days: -1}":                "expires_days",
+		"{contact: [\"tel:1\"], preferred_languages: \"en; es\"}": "preferred_languages",
+	} {
+		if _, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: {security_txt: "+body+"}\n")); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err %v, want %q", body, err, want)
+		}
+	}
+	if _, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: {base_url: \"https://x.io/sub/\", security_txt: {contact: [\"tel:1\"]}}\n")); err == nil || !strings.Contains(err.Error(), "root of its host") {
+		t.Errorf("sub-path site: %v", err)
+	}
+	if _, err := Load(writeConfig(t, "vault: /v\nroot: R\ntarget: jekyll\nsite: {security_txt: {contact: [\"tel:1\"]}}\n")); err == nil || !strings.Contains(err.Error(), "html target") {
+		t.Errorf("jekyll target: %v", err)
+	}
+}

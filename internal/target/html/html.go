@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/deweysasser/obsidian-publish-website/internal/config"
 	"github.com/deweysasser/obsidian-publish-website/internal/render"
@@ -46,6 +47,8 @@ type Target struct {
 	versioned map[string]string
 	// Warn receives non-fatal problems.
 	Warn func(string)
+	// now is the build time (security.txt's Expires); a field for tests.
+	now func() time.Time
 }
 
 // noteLink links the note a setting names (a path relative to root) by
@@ -70,7 +73,7 @@ func (t *Target) noteLink(s *target.Site, setting, rel string) (*tagLink, error)
 // New creates the html target.
 func New(cfg *config.Config) (*Target, error) {
 	base := urls.BasePathOf(cfg.Site.BaseURL)
-	t := &Target{cfg: cfg, base: base, scheme: urls.HTML(base), out: cfg.Output, Warn: func(string) {}}
+	t := &Target{cfg: cfg, base: base, scheme: urls.HTML(base), out: cfg.Output, Warn: func(string) {}, now: time.Now}
 	if u, err := url.Parse(cfg.Site.BaseURL); err == nil && u.Scheme != "" && u.Host != "" {
 		t.origin = u.Scheme + "://" + u.Host
 	}
@@ -251,6 +254,12 @@ func (t *Target) Finalize(s *target.Site) error {
 			return fmt.Errorf("site.favicon: %w", err)
 		}
 	}
+	if err := t.writeRootFavicons(s.Config.Site.Favicon, s.Config.Vault); err != nil {
+		return err
+	}
+	if err := t.writeSecurityTxt(s.Config.Site.SecurityTxt); err != nil {
+		return err
+	}
 	if err := fs.WalkDir(assetFS, "assets", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
@@ -272,6 +281,10 @@ func (t *Target) Finalize(s *target.Site) error {
 		return err
 	}
 	if err := target.WriteFile(t.out, "_headers", []byte(cacheHeaders)); err != nil {
+		return err
+	}
+	// last, so a redirect can never replace a page or file written above
+	if err := t.writeRedirects(s); err != nil {
 		return err
 	}
 	return t.writeSitemap(s)
