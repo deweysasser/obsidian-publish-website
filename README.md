@@ -110,7 +110,7 @@ site:
   title: Town Notes
   base_url: https://example.github.io/town/   # absolute URL; its path prefixes every link
   home: Town Notes.md                  # optional, relative to root; default: root folder note
-  favicon: Attachments/icon.png        # optional, relative to the vault; default: a generic icon
+  favicon: Attachments/icon.png        # optional, relative to the vault; default: a generic icon (see html target)
   hidden_tags: [MOCs]                  # optional: organizing tags to leave off the site (and nested ones)
   tags: false                          # optional: leave all tags off the site (default true)
   about: About.md                      # optional, relative to root: linked by its title from the sidebar and every page's footer
@@ -125,6 +125,11 @@ site:
   suggest:                             # optional: a suggestion form at /suggest/, and links to it on every page
     endpoint: /api/suggest             # a path on this site; see "Suggestion form"
     # kinds: […]                       # default: one kind, "Suggest a change"
+  security_txt:                        # optional: /.well-known/security.txt (html target; base_url at the host root)
+    contact: ["https://example.github.io/report/"]   # https:, mailto: or tel:, most preferred first
+    # expires_days: 180                # Expires = build date + this (at most 365)
+    # policy: https://example.github.io/disclosure/
+    # preferred_languages: en
 html:
   template_dir: ./templates            # optional: override layout.html
 hugo:
@@ -156,6 +161,42 @@ frontmatter, else the first substantial paragraph), a canonical URL and
 Open Graph tags for link previews. Wide tables turn into labelled cards on
 phones. A `_headers` file lets Cloudflare Pages (or Netlify) cache the
 content-hashed CSS/JS and Pagefind's index for a year.
+
+Browsers and crawlers ask for `/favicon.ico` and `/favicon.png` whatever
+the page's icon link says, so both are published at the site root. They
+are made from `site.favicon` when it is a PNG, JPEG or GIF (the `.ico`
+holds 16, 32 and 48 pixel copies), or from the built-in icon when
+`site.favicon` is unset. A configured `.ico` is published as is; a
+configured SVG or WebP gets neither, rather than a generic icon.
+
+With `site.security_txt`, the build writes
+[`/.well-known/security.txt`](https://www.rfc-editor.org/rfc/rfc9116)
+(and a copy at `/security.txt`): the contacts, the policy and languages if
+given, a `Canonical` line, and `Expires` set to the build date plus
+`expires_days`. A site rebuilt regularly therefore never publishes an
+expired file; one that stops being rebuilt lets it lapse, as the RFC
+intends.
+
+#### Moved notes
+
+A note that moved keeps its old URLs working with a `redirect_from` list
+in its frontmatter: paths on the site, relative to `base_url`.
+
+```yaml
+---
+redirect_from:
+  - /notes/old-name/                     # served as …/index.html
+  - /old-page.html                       # a path with an extension is that file
+---
+```
+
+Static hosts can't answer with a real redirect, so each old URL gets a
+small page that sends the visitor on (a meta refresh), with a canonical
+link to the note and `noindex`; it stays out of the sitemap and search. An
+old URL that is already a page or file of the site, under a generated
+folder (`/assets/`, `/tags/`, `/pagefind/`, `/suggest/`, `/.well-known/`),
+or claimed by another note is skipped with a warning. The hugo and jekyll
+targets ignore the key.
 
 ### hugo
 
