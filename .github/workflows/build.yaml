@@ -64,11 +64,28 @@ jobs:
           printf 'vault: /vault\nroot: Town\nsite: {title: T, base_url: "http://localhost/"}\n' > "$RUNNER_TEMP/work/publish.yaml"
           docker run --rm --network none --user "$(id -u):$(id -g)" \
             -v "$PWD/testdata/fixture-vault:/vault:ro" -v "$RUNNER_TEMP/work:/work" \
-            ghcr.io/${{env.REPO}}:${{env.TAG}} build --strict
+            ghcr.io/${{env.REPO}}:${{env.TAG}} build --strict --output-format jsonl | tee "$RUNNER_TEMP/build.log"
           test -f "$RUNNER_TEMP/work/site/issues/road-repair/index.html"
           test -d "$RUNNER_TEMP/work/site/pagefind"
+          # Search indexed through the Node API in stable order, not the CLI fallback.
+          grep -q '"stable_order":true' "$RUNNER_TEMP/build.log"
           # The Go program's HTTPS (R2, purge API, YouTube) needs the system CA bundle.
           docker run --rm --entrypoint test ghcr.io/${{env.REPO}}:${{env.TAG}} -s /etc/ssl/certs/ca-certificates.crt
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      # The real-Pagefind search tests, against the image's own node and
+      # pagefind. TestRunPagefindStableChunks fails if a Pagefind upgrade
+      # stops numbering pages in the order they're added.
+      - name: Search tests in the image
+        run: |
+          CGO_ENABLED=0 go test -c -o "$RUNNER_TEMP/search.test" ./internal/search
+          docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/tmp \
+            -v "$RUNNER_TEMP/search.test:/search.test:ro" --entrypoint /search.test \
+            ghcr.io/${{env.REPO}}:${{env.TAG}} -test.v -test.run 'TestRunPagefind'
 
       - name: Push
         run: docker push ghcr.io/${{env.REPO}}:${{env.TAG}}

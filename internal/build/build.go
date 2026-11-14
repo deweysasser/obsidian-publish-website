@@ -3,6 +3,8 @@ package build
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
@@ -158,7 +160,7 @@ func Run(cfg *config.Config, log zerolog.Logger) (*Report, error) {
 		return nil, err
 	}
 	if runner != nil {
-		if err := search.RunPagefind(context.Background(), runner, cfg.Output, log); err != nil {
+		if err := search.RunPagefind(context.Background(), runner, cfg.Output, searchOrderFile(cfg), log); err != nil {
 			return nil, err
 		}
 	}
@@ -240,11 +242,7 @@ func youtubeEmbeds(ix *index.Index, pub *selector.Published, warn func(string), 
 			add(youtube.IDOf(string(m[1])))
 		}
 	}
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
-		cacheDir = os.TempDir()
-	}
-	c := youtube.NewChecker(filepath.Join(cacheDir, "obsidian-publish", "youtube-embeddable.json"))
+	c := youtube.NewChecker(filepath.Join(cacheDir(), "obsidian-publish", "youtube-embeddable.json"))
 	if len(ids) > 0 {
 		start := time.Now()
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -285,4 +283,29 @@ func newTarget(cfg *config.Config, warn func(string), log zerolog.Logger) (targe
 		return t, nil
 	}
 	return nil, errors.New("target " + cfg.Target + " is not implemented yet")
+}
+
+// cacheDir is where builds keep state between runs: the user cache.
+func cacheDir() string {
+	d, err := os.UserCacheDir()
+	if err != nil {
+		return os.TempDir()
+	}
+	return d
+}
+
+// searchOrderFile is where the search index's page order is kept between
+// builds of one site: per base_url, or per output directory when there is
+// no absolute base_url. Never in the vault or the output.
+func searchOrderFile(cfg *config.Config) string {
+	key := cfg.Site.BaseURL
+	if u, err := url.Parse(key); err != nil || u.Scheme == "" || u.Host == "" {
+		abs, err := filepath.Abs(cfg.Output)
+		if err != nil {
+			return ""
+		}
+		key = "output:" + abs
+	}
+	sum := sha256.Sum256([]byte(key))
+	return filepath.Join(cacheDir(), "obsidian-publish", "search-order", hex.EncodeToString(sum[:8])+".json")
 }
