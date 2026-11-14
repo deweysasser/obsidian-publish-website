@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -58,7 +59,10 @@ type syncOptions struct {
 
 type syncResult struct {
 	uploaded, deleted []string
-	unchanged         int
+	// added are the uploaded keys the bucket didn't have; the rest of
+	// uploaded replaced an object whose content differed (or was forced).
+	added     []string
+	unchanged int
 }
 
 // Names of the secrets r2 resolves.
@@ -95,8 +99,11 @@ func r2(ctx context.Context, cfg *config.Config, log zerolog.Logger) (string, er
 		concurrency: rc.Concurrency, force: cfg.Deploy.ForceUpload,
 		maxDeleteFraction: rc.MaxDeleteFraction, allowMassDelete: cfg.Deploy.AllowMassDelete,
 	})
+	logChanges(log, res, cfg.Deploy.ForceUpload)
 	log.Info().Err(syncErr).Int("uploaded", len(res.uploaded)).Int("deleted", len(res.deleted)).
-		Int("unchanged", res.unchanged).Msg("Synced to R2")
+		Int("unchanged", res.unchanged).Int("added", len(res.added)).
+		Dict("uploaded_by", groupCounts(res.uploaded)).Dict("deleted_by", groupCounts(res.deleted)).
+		Msg("Synced to R2")
 	purged := 0
 	var purgeErr error
 	if p := rc.Purge; p != nil {
@@ -125,7 +132,7 @@ func r2(ctx context.Context, cfg *config.Config, log zerolog.Logger) (string, er
 // delete more than o.maxDeleteFraction of the bucket. On error, res still
 // says what was uploaded and deleted.
 func syncDir(ctx context.Context, store objectStore, dir string, o syncOptions) (res syncResult, err error) {
-	defer func() { sort.Strings(res.uploaded) }()
+	defer func() { sort.Strings(res.uploaded); sort.Strings(res.added) }()
 	remote, err := store.List(ctx)
 	if err != nil {
 		return res, fmt.Errorf("listing bucket: %w", err)
@@ -237,6 +244,9 @@ func uploadAll(ctx context.Context, store objectStore, dir string, keys []string
 				}
 				mu.Lock()
 				res.uploaded = append(res.uploaded, key)
+				if _, existed := remote[key]; !existed {
+					res.added = append(res.added, key)
+				}
 				mu.Unlock()
 			}
 		})
@@ -255,6 +265,71 @@ feed:
 		return firstErr
 	}
 	return ctx.Err() // the caller's cancellation
+}
+
+// logChanges writes one debug line per uploaded or deleted key, saying why:
+// "new" (not in the bucket), "changed" (its MD5 differed), "forced"
+// (--force-upload) or "removed" (no longer in the build).
+func logChanges(log zerolog.Logger, res syncResult, forced bool) {
+	if !log.Debug().Enabled() { // the logger's level or the global one (--debug)
+		return
+	}
+	added := make(map[string]bool, len(res.added))
+	for _, k := range res.added {
+		added[k] = true
+	}
+	for _, k := range res.uploaded {
+		reason := "changed"
+		switch {
+		case added[k]:
+			reason = "new"
+		case forced:
+			reason = "forced"
+		}
+		log.Debug().Str("op", "upload").Str("reason", reason).Str("key", k).Msg("R2 change")
+	}
+	for _, k := range res.deleted {
+		log.Debug().Str("op", "delete").Str("reason", "removed").Str("key", k).Msg("R2 change")
+	}
+}
+
+// groupCounts counts keys by changeGroup, for the per-deploy summary.
+func groupCounts(keys []string) *zerolog.Event {
+	n := map[string]int{}
+	for _, k := range keys {
+		n[changeGroup(k)]++
+	}
+	d := zerolog.Dict()
+	for _, g := range slices.Sorted(maps.Keys(n)) {
+		d.Int(g, n[g])
+	}
+	return d
+}
+
+// changeGroup names the part of the site a key belongs to, so a deploy's
+// summary says where its changes are: Pagefind's index by kind, assets,
+// files at the root, and pages by the folder above them, at most two levels
+// deep ("us/texas/houston/index.html" and "us/texas/a/b/index.html" are both
+// "pages:us/texas"; "about/index.html" is "pages:/").
+func changeGroup(key string) string {
+	if rest, ok := strings.CutPrefix(key, "pagefind/"); ok {
+		if kind, _, nested := strings.Cut(rest, "/"); nested {
+			return "pagefind:" + kind // fragment, index, filter
+		}
+		return "pagefind"
+	}
+	if strings.HasPrefix(key, "assets/") {
+		return "assets"
+	}
+	dir := path.Dir(key)
+	if !strings.HasSuffix(key, ".html") || dir == "." {
+		return "root" // sitemap.xml, robots.txt, favicon.ico, index.html, 404.html, ...
+	}
+	parent := strings.Split(path.Dir(dir), "/")
+	if parent[0] == "." {
+		return "pages:/"
+	}
+	return "pages:" + strings.Join(parent[:min(2, len(parent))], "/")
 }
 
 // localFiles lists the files under dir to publish, as slash-separated keys.
