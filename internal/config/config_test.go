@@ -364,3 +364,39 @@ func TestSecurityTxtDefaultsAndValidation(t *testing.T) {
 		t.Errorf("jekyll target: %v", err)
 	}
 }
+
+func TestInclude(t *testing.T) {
+	c, err := Load(writeConfig(t, "vault: /v\nroot: R\nexclude: [Team/**]\ninclude:\n  - path: Team/**\n    tags: [profile, \"#shared/public\"]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Include) != 1 || c.Include[0].Path != "Team/**" || len(c.Include[0].Tags) != 2 {
+		t.Errorf("include %+v", c.Include)
+	}
+	if _, err := Load(writeConfig(t, "vault: /v\nroot: R\ninclude: [{path: a, tags: [b], tag: c}]\n")); err == nil {
+		t.Error("unknown key in an include rule accepted")
+	}
+	for _, tc := range []struct {
+		rule Include
+		want string
+	}{
+		{Include{Tags: []string{"a"}}, "include[0].path is required"},
+		{Include{Path: "[a", Tags: []string{"a"}}, "include[0].path \"[a\" is not a valid glob"},
+		{Include{Path: "/Team/**", Tags: []string{"a"}}, "include[0].path \"/Team/**\" must be relative"},
+		{Include{Path: "../Other/**", Tags: []string{"a"}}, "include[0].path \"../Other/**\" must be relative"},
+		{Include{Path: "Team/**"}, "include[0].tags needs at least one tag"},
+		{Include{Path: "Team/**", Tags: []string{"two words"}}, "include[0].tags \"two words\" must be a tag"},
+		{Include{Path: "Team/**", Tags: []string{"ok", "#"}}, "include[0].tags \"#\" must be a tag"},
+		{Include{Path: "Team/**", Tags: []string{"x/"}}, "include[0].tags \"x/\" must be a tag"},
+	} {
+		c := &Config{Vault: "/v", Root: "R", Target: "html", Search: "none", Include: []Include{tc.rule}}
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%+v: want error containing %q, got %v", tc.rule, tc.want, err)
+		}
+	}
+	c = &Config{Vault: "/v", Root: "R", Target: "html", Search: "none",
+		Include: []Include{{Path: "Team/**", Tags: []string{"a"}}, {Path: "x", Tags: []string{"b"}}, {Path: "y", Tags: []string{"b c"}}}}
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "include[2].tags") || strings.Contains(err.Error(), "include[0]") {
+		t.Errorf("index in message: %v", err)
+	}
+}

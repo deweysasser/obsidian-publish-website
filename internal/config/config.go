@@ -225,6 +225,37 @@ func (s Site) TagHidden(tag string) bool {
 	return false
 }
 
+// Include is a rule that publishes notes an exclude pattern would drop: a
+// note is re-admitted when its path matches Path and it has at least one of
+// Tags. It never overrides a frontmatter "publish" opt-out, never reaches
+// notes outside root, and never re-admits attachments.
+type Include struct {
+	// Path is a glob relative to root, matched like an exclude pattern
+	// (against the note's path and each parent folder).
+	Path string `yaml:"path"`
+	// Tags are Obsidian tags, '#' optional and case-insensitive; "a" also
+	// matches the nested tag "a/b".
+	Tags []string `yaml:"tags"`
+}
+
+// MatchesTag reports whether any of a note's tags (with or without '#')
+// satisfies the rule.
+func (in Include) MatchesTag(noteTags []string) bool {
+	for _, want := range in.Tags {
+		w := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(want), "#"))
+		if w == "" {
+			continue
+		}
+		for _, t := range noteTags {
+			t = strings.ToLower(strings.TrimPrefix(t, "#"))
+			if t == w || strings.HasPrefix(t, w+"/") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // validTag reports whether t (with or without '#') could be an Obsidian tag.
 func validTag(t string) bool {
 	t = strings.TrimPrefix(t, "#")
@@ -320,6 +351,8 @@ type Config struct {
 	Output   string   `yaml:"output"`
 	Search   string   `yaml:"search"`
 	Dataview string   `yaml:"dataview"`
+	// Include re-admits notes that an Exclude pattern drops (see Include).
+	Include []Include `yaml:"include"`
 	// DataviewScope is the set of notes queries can read: "published" (default)
 	// or "vault" (every note, including excluded ones — their fields and task
 	// text can then appear in query results).
@@ -576,6 +609,24 @@ func (c *Config) Validate() error {
 	for _, g := range c.Exclude {
 		if !doublestar.ValidatePattern(g) {
 			errs = append(errs, fmt.Errorf("exclude pattern %q is invalid", g))
+		}
+	}
+	for i, in := range c.Include {
+		switch {
+		case in.Path == "":
+			errs = append(errs, fmt.Errorf("include[%d].path is required: a glob relative to root, like an exclude pattern", i))
+		case !doublestar.ValidatePattern(in.Path):
+			errs = append(errs, fmt.Errorf("include[%d].path %q is not a valid glob", i, in.Path))
+		case strings.HasPrefix(in.Path, "/") || slices.Contains(strings.Split(in.Path, "/"), ".."):
+			errs = append(errs, fmt.Errorf("include[%d].path %q must be relative to root (no leading '/' or '..')", i, in.Path))
+		}
+		if len(in.Tags) == 0 {
+			errs = append(errs, fmt.Errorf("include[%d].tags needs at least one tag", i))
+		}
+		for _, t := range in.Tags {
+			if !validTag(strings.TrimSpace(t)) {
+				errs = append(errs, fmt.Errorf("include[%d].tags %q must be a tag (no spaces, '#' optional)", i, t))
+			}
 		}
 	}
 	return errors.Join(errs...)

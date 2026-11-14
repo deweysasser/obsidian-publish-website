@@ -8,7 +8,8 @@ evaluated by Dataview itself.
 - **Dataview:** `TABLE`, `LIST`, `TASK` and inline `` `= expr` `` queries are
   run by the real Dataview engine (bundled, pinned release) against the whole
   vault, so results match Obsidian.
-- **Exclusion:** glob patterns and `publish: false` frontmatter. Links to
+- **Exclusion:** glob patterns and `publish: false` frontmatter, with
+  opt-in rules to publish excluded notes by tag. Links to
   anything not published render as plain text; excluded content never
   reaches the output.
 - **Site features (html):** folder navigation, per-page table of contents,
@@ -100,6 +101,9 @@ vault: ~/Documents/MyVault             # vault root (relative paths are relative
 root: Town Notes                       # folder inside the vault to publish
 exclude:                               # globs relative to root; a matching folder excludes everything in it
   - People/**
+include:                               # optional: publish excluded notes that carry a tag (see below)
+  - path: People/**                    # glob relative to root, matched like an exclude pattern
+    tags: [public-profile]             # the note needs at least one ('#' optional; nested tags match)
 target: html                           # html | hugo | jekyll
 output: ./site
 search: pagefind                       # pagefind | none (html target only)
@@ -144,6 +148,27 @@ A note is excluded if its path (relative to `root`) or any parent folder
 matches an `exclude` glob, or if its frontmatter has a `publish` key that is
 not `true`/`yes`. Folder notes (`Folder/Folder.md` or `Folder/index.md`)
 become the folder's page.
+
+An `include` rule publishes a note that an `exclude` glob drops when the
+note's path (or a parent folder) matches the rule's `path` glob and the note
+has at least one of the rule's `tags`. Tags are the note's Obsidian tags —
+frontmatter `tags`/`tag` and inline `#tags` — matched case-insensitively,
+with a rule tag `x` also matching nested tags `x/…`. Matching uses the note's
+own tags, so the marker tag can be left off the site with `hidden_tags` or
+`tags: false`. Include rules are narrow on purpose:
+
+- **`publish` still wins.** A note whose frontmatter `publish` is not
+  `true`/`yes` stays excluded whatever its tags.
+- **Notes only, inside `root`.** Notes outside `root` are never published.
+  Attachments are not re-admitted: an attachment in an excluded folder stays
+  excluded, so an included note that embeds one renders without it (with a
+  build warning), and a link to it is plain text.
+- **Each note on its own.** Re-admitting notes makes their folder appear in
+  navigation and breadcrumbs, and its listing page shows only published
+  notes. A folder note is published only if it matches a rule itself.
+
+Links to an included note become real links; links to notes that stay
+excluded are still plain text.
 
 ## Targets
 
