@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fakeBin installs an executable shell script named name in a fresh PATH dir.
@@ -156,5 +157,23 @@ func TestPublishedImagePinsMatchToolsImage(t *testing.T) {
 	got := pins(read(t, "../../Dockerfile"))
 	if len(want) != 3 || strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("Dockerfile pins %v, internal/tools/Dockerfile pins %v", got, want)
+	}
+}
+
+// A tool that exits while a child it started still holds its output must
+// not hang the build: after waitDelay the run returns an error.
+func TestLingeringChildDoesNotHang(t *testing.T) {
+	bin := fakePath(t)
+	fakeBin(t, bin, "node", `sleep 5 & echo done`)
+	old := waitDelay
+	waitDelay = 200 * time.Millisecond
+	t.Cleanup(func() { waitDelay = old })
+	start := time.Now()
+	out, err := New("host", "").Run(context.Background(), Spec{Tool: "node"})
+	if took := time.Since(start); took > 3*time.Second {
+		t.Errorf("took %v: waited for the child", took)
+	}
+	if err == nil || !strings.Contains(out, "done") {
+		t.Errorf("out %q err %v, want the tool's output and a WaitDelay error", out, err)
 	}
 }

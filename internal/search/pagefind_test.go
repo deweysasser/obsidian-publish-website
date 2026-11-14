@@ -8,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/deweysasser/obsidian-publish-website/internal/tools"
 	"github.com/rs/zerolog"
@@ -44,6 +46,51 @@ func TestRunPagefind(t *testing.T) {
 	}
 	if got := loadOrder(state); len(got) != 1 || got[0] != "index.html" {
 		t.Errorf("saved order %v", got)
+	}
+	// The indexer never kills pagefind's service; the service must exit on
+	// its own once the indexer has gone (stdin EOF).
+	if runtime.GOOS == "linux" && mode == "host" {
+		deadline := time.Now().Add(5 * time.Second)
+		for pids := servicePIDs(); len(pids) > 0; pids = servicePIDs() {
+			if time.Now().After(deadline) {
+				t.Errorf("pagefind --service still running: pids %v", pids)
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+}
+
+// servicePIDs lists running "pagefind --service" processes (Linux /proc).
+func servicePIDs() []string {
+	var pids []string
+	dirs, _ := filepath.Glob("/proc/[0-9]*")
+	for _, d := range dirs {
+		b, err := os.ReadFile(filepath.Join(d, "cmdline"))
+		if err != nil {
+			continue
+		}
+		args := strings.Split(string(b), "\x00")
+		if len(args) > 1 && strings.Contains(filepath.Base(args[0]), "pagefind") && args[1] == "--service" {
+			stat, _ := os.ReadFile(filepath.Join(d, "stat"))
+			if !strings.Contains(string(stat), ") Z ") { // a zombie has exited
+				pids = append(pids, filepath.Base(d))
+			}
+		}
+	}
+	return pids
+}
+
+// The indexer must not call pagefind.close(): it SIGTERMs the service, and
+// where a security policy refuses that signal Pagefind's wrapper retries
+// forever (kill EACCES). It exits instead; see indexer.mjs.
+func TestIndexerDoesNotKillTheService(t *testing.T) {
+	code := string(indexerJS)
+	if strings.Contains(code, "pagefind.close(") || strings.Contains(code, ".kill(") {
+		t.Error("indexer.mjs stops the pagefind service by signal")
+	}
+	if !strings.Contains(code, "process.exit(0)") {
+		t.Error("indexer.mjs must exit explicitly once the index is written")
 	}
 }
 

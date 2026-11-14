@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"time"
 )
 
 //go:embed Dockerfile
@@ -157,9 +158,15 @@ func (d *docker) ensureImage(ctx context.Context) (string, error) {
 	return image, nil
 }
 
+// waitDelay bounds how long a finished tool's children may hold its output
+// open. Without it, a child that outlives the tool (such as pagefind's
+// service process) would hang the build forever; with it, the build fails.
+var waitDelay = 30 * time.Second // a var for tests
+
 func run(cmd *exec.Cmd, name string) (string, error) {
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
+	cmd.WaitDelay = waitDelay
 	if err := cmd.Run(); err != nil {
 		return out.String(), fmt.Errorf("%s failed: %v\n%s", name, err, strings.TrimSpace(out.String()))
 	}
