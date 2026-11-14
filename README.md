@@ -549,6 +549,32 @@ tools:
 `OBSIDIAN_PUBLISH_TOOLS_RUNNER=docker|host` overrides `tools.runner`; the
 container image sets it to `host`.
 
+#### Search index churn
+
+Pagefind numbers pages in the order it indexes them, and every chunk of
+its index stores those numbers. Indexed in path order, one new page
+renumbers the pages after it and renames nearly every chunk, so each
+deploy re-uploads the whole index. The build therefore indexes through
+Pagefind's Node API in a stable order: pages keep their positions from
+the previous build, new pages first fill the places of removed ones and
+then go at the end. Adding a page then renames only the few chunks that
+hold its words. Removing a page with no new one to take its place still
+shifts the pages after it.
+
+The order is kept in the user cache (`~/.cache/obsidian-publish/search-order/`
+on Linux), one file per `base_url`, never in the vault or the site;
+without it the next build starts again from path order. With
+`tools.runner: host` this needs `node` and the `pagefind` npm package
+installed globally; with only the `pagefind` binary the build falls back
+to its CLI and logs a warning. `Indexed site search` logs `pages`,
+`stable_order`, and, when ordered, how many pages were `new` or `removed`.
+
+Keeping numbers stable relies on Pagefind (1.5) numbering pages in the
+order they are added, which it does but does not document. The image's
+CI runs a test against the real Pagefind that fails if an upgrade stops
+doing so; in production, the deploy log's `pagefind:index` count would
+show the whole index being replaced again.
+
 ## Development
 
 ```bash
