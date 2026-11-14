@@ -39,5 +39,10 @@ for (const rel of order) {
 }
 const w = await index.writeFiles({ outputPath: "pagefind" });
 check(w.errors, "writeFiles");
-await pagefind.close();
 console.log(`indexed ${order.length} pages in order`);
+// Not the API's close(): it SIGTERMs the pagefind --service child, and where
+// a security policy refuses that signal (seen as kill EACCES in a rootful
+// podman container with all capabilities dropped) its error handler retries
+// close() forever.
+// Exiting closes the child's stdin, and the service exits on EOF by itself.
+process.exit(0);

@@ -87,6 +87,20 @@ jobs:
             -v "$RUNNER_TEMP/search.test:/search.test:ro" --entrypoint /search.test \
             ghcr.io/${{env.REPO}}:${{env.TAG}} -test.v -test.run 'TestRunPagefind'
 
+      # Some hosts refuse signals inside the container (seen as kill EACCES
+      # under rootful podman). Building with kill(2) denied by seccomp must
+      # still succeed: the indexer must never need to signal pagefind.
+      - name: Build with kill denied
+        run: |
+          echo '{"defaultAction":"SCMP_ACT_ALLOW","syscalls":[{"names":["kill"],"action":"SCMP_ACT_ERRNO","errnoRet":13}]}' > "$RUNNER_TEMP/nokill.json"
+          mkdir -p "$RUNNER_TEMP/nokill"
+          cp "$RUNNER_TEMP/work/publish.yaml" "$RUNNER_TEMP/nokill/"
+          docker run --rm --network none --user "$(id -u):$(id -g)" --cap-drop=all \
+            --security-opt=no-new-privileges --security-opt seccomp="$RUNNER_TEMP/nokill.json" \
+            -v "$PWD/testdata/fixture-vault:/vault:ro" -v "$RUNNER_TEMP/nokill:/work" \
+            ghcr.io/${{env.REPO}}:${{env.TAG}} build --strict --output-format jsonl | tee "$RUNNER_TEMP/nokill.log"
+          grep -q '"stable_order":true' "$RUNNER_TEMP/nokill.log"
+
       - name: Push
         run: docker push ghcr.io/${{env.REPO}}:${{env.TAG}}
 
