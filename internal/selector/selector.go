@@ -21,6 +21,7 @@ type Published struct {
 	Folders map[string]string // vault folder path (root and below) → slug path
 
 	exclude     []string
+	include     []config.Include
 	folderNotes map[string]string
 	assetSlugs  map[string]string // slug → attachment path, for collision avoidance
 }
@@ -29,7 +30,7 @@ type Published struct {
 func Select(ix *index.Index, cfg *config.Config) (*Published, error) {
 	pub := &Published{
 		Root: cfg.Root, Pages: map[string]string{}, Assets: map[string]string{},
-		Folders: map[string]string{cfg.Root: ""}, exclude: cfg.Exclude, folderNotes: map[string]string{},
+		Folders: map[string]string{cfg.Root: ""}, exclude: cfg.Exclude, include: cfg.Include, folderNotes: map[string]string{},
 	}
 	home := ""
 	if cfg.Site.Home != "" {
@@ -38,7 +39,10 @@ func Select(ix *index.Index, cfg *config.Config) (*Published, error) {
 	owner := map[string]string{} // slug → note path, for collision detection
 	for _, p := range ix.Paths {
 		rel, ok := pub.rel(p)
-		if !ok || pub.excluded(rel) || publishFalse(ix.Pages[p].Note.Frontmatter) {
+		if !ok || publishFalse(ix.Pages[p].Note.Frontmatter) {
+			continue
+		}
+		if pub.excluded(rel) && !pub.included(rel, ix.Pages[p].Tags) {
 			continue
 		}
 		dir := path.Dir(rel)
@@ -111,10 +115,31 @@ func (p *Published) rel(vaultPath string) (string, bool) {
 // directories, matches an exclude pattern.
 func (p *Published) excluded(rel string) bool {
 	for _, pat := range p.exclude {
-		for cur := rel; cur != "."; cur = path.Dir(cur) {
-			if ok, _ := doublestar.Match(pat, cur); ok {
-				return true
-			}
+		if matchUp(pat, rel) {
+			return true
+		}
+	}
+	return false
+}
+
+// included reports whether an include rule re-admits the note at a
+// root-relative path with the given tags: the note's own tags, before
+// hidden_tags or tags: false hide any. Attachments never come through here;
+// IsAssetAllowed applies the exclude patterns alone.
+func (p *Published) included(rel string, tags []string) bool {
+	for _, in := range p.include {
+		if matchUp(in.Path, rel) && in.MatchesTag(tags) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchUp reports whether pat matches rel or any of its parent directories.
+func matchUp(pat, rel string) bool {
+	for cur := rel; cur != "."; cur = path.Dir(cur) {
+		if ok, _ := doublestar.Match(pat, cur); ok {
+			return true
 		}
 	}
 	return false

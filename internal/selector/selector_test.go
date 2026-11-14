@@ -175,3 +175,96 @@ func TestHomeOutsideFolderNoteOwnsFolderURL(t *testing.T) {
 		t.Errorf("folders %v note %q", pub.Folders, pub.FolderNote("R/State/Town"))
 	}
 }
+
+func TestIncludeReadmitsTaggedNotes(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "R/a.md", "a")
+	write(t, dir, "R/Team/Team.md", "folder note, untagged")
+	write(t, dir, "R/Team/fm.md", "---\ntags: [profile]\n---\nfrontmatter tag")
+	write(t, dir, "R/Team/single.md", "---\ntag: profile\n---\nsingular key")
+	write(t, dir, "R/Team/inline.md", "inline #Profile tag, other case")
+	write(t, dir, "R/Team/nested.md", "nested #profile/public tag")
+	write(t, dir, "R/Team/prefix.md", "#profiles is a different tag")
+	write(t, dir, "R/Team/parent.md", "#other/profile has profile only as a child")
+	write(t, dir, "R/Team/untagged.md", "no tag")
+	write(t, dir, "R/Team/coded.md", "`#profile` in code\n```\n#profile\n```\n%% #profile %%")
+	write(t, dir, "R/Team/optout.md", "---\ntags: [profile]\npublish: false\n---\nx")
+	write(t, dir, "R/Team/optout2.md", "---\ntags: [profile]\npublish: maybe\n---\nx")
+	write(t, dir, "R/Team/Sub/deep.md", "#profile")
+	write(t, dir, "R/Team/pic.png", "png")
+	write(t, dir, "R/Other/o.md", "#profile, but no rule covers this folder")
+	write(t, dir, "Outside/x.md", "#profile, outside root")
+	cfg := &config.Config{Root: "R", Exclude: []string{"Team/**", "Other/**"},
+		Include: []config.Include{{Path: "Team/**", Tags: []string{"#PROFILE"}}, {Path: "../Outside/**", Tags: []string{"profile"}}},
+		// Hiding the marker tag, or every tag, must not change selection.
+		Site: config.Site{HiddenTags: []string{"profile"}, Tags: new(bool)}}
+	pub, err := Select(load(t, dir), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"R/a.md", "R/Team/fm.md", "R/Team/single.md", "R/Team/inline.md", "R/Team/nested.md", "R/Team/Sub/deep.md"} {
+		if !pub.IsPublished(p) {
+			t.Errorf("%s not re-admitted", p)
+		}
+	}
+	for _, p := range []string{"R/Team/Team.md", "R/Team/prefix.md", "R/Team/parent.md", "R/Team/untagged.md", "R/Team/coded.md",
+		"R/Team/optout.md", "R/Team/optout2.md", "R/Other/o.md", "Outside/x.md"} {
+		if pub.IsPublished(p) {
+			t.Errorf("%s published", p)
+		}
+	}
+	if pub.Pages["R/Team/fm.md"] != "team/fm" || pub.Pages["R/Team/Sub/deep.md"] != "team/sub/deep" {
+		t.Errorf("slugs %v", pub.Pages)
+	}
+	// The folder tree reaches re-admitted notes, but the untagged folder
+	// note stays out: the folder gets a generated listing instead.
+	if pub.Folders["R/Team"] != "team" || pub.Folders["R/Team/Sub"] != "team/sub" || pub.FolderNote("R/Team") != "" {
+		t.Errorf("folders %v note %q", pub.Folders, pub.FolderNote("R/Team"))
+	}
+	if _, ok := pub.Folders["R/Other"]; ok {
+		t.Error("folder with no published notes listed")
+	}
+	if pub.IsAssetAllowed("R/Team/pic.png") {
+		t.Error("include re-admitted an attachment")
+	}
+}
+
+func TestIncludeFolderNoteNeedsItsOwnTag(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "R/a.md", "a")
+	write(t, dir, "R/Team/Team.md", "#profile folder note")
+	write(t, dir, "R/Team/m.md", "untagged member")
+	pub, err := Select(load(t, dir), &config.Config{Root: "R", Exclude: []string{"Team"},
+		Include: []config.Include{{Path: "Team", Tags: []string{"profile"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pub.Pages["R/Team/Team.md"] != "team" || pub.FolderNote("R/Team") != "R/Team/Team.md" || pub.IsPublished("R/Team/m.md") {
+		t.Errorf("pages %v folder note %q", pub.Pages, pub.FolderNote("R/Team"))
+	}
+}
+
+func TestIncludeNeverOverridesPublishFalse(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "R/a.md", "a")
+	write(t, dir, "R/b.md", "---\npublish: false\ntags: [profile]\n---\nb")
+	pub, err := Select(load(t, dir), &config.Config{Root: "R", Include: []config.Include{{Path: "**", Tags: []string{"profile"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !pub.IsPublished("R/a.md") || pub.IsPublished("R/b.md") {
+		t.Errorf("pages %v", pub.Pages)
+	}
+}
+
+func TestIncludeMatchesTag(t *testing.T) {
+	in := config.Include{Tags: []string{"a", "#B/c"}}
+	for tags, want := range map[string]bool{
+		"#a": true, "A": true, "#a/x/y": true, "#b/c": true, "#B/C/d": true,
+		"#b": false, "#ab": false, "#x/a": false, "#b/cd": false, "": false,
+	} {
+		if got := in.MatchesTag(strings.Fields(tags)); got != want {
+			t.Errorf("tags %q: got %v want %v", tags, got, want)
+		}
+	}
+}
