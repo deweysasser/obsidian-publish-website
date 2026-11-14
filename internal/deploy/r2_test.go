@@ -189,6 +189,9 @@ func TestSyncDir(t *testing.T) {
 	if res.unchanged != 2 {
 		t.Errorf("unchanged %d, want 2", res.unchanged)
 	}
+	if want := []string{"a/index.html", "pagefind/x.pf_js"}; !reflect.DeepEqual(res.added, want) {
+		t.Errorf("added %v, want %v (style.css replaced an object)", res.added, want)
+	}
 	for _, k := range []string{target.Marker, "_headers", "_redirects"} {
 		if _, ok := store.objects[k]; ok {
 			t.Errorf("%s published", k)
@@ -679,5 +682,78 @@ func TestR2Live(t *testing.T) {
 	})
 	if !reflect.DeepEqual(keys, []string{"a/index.html", "index.html", "s.css"}) {
 		t.Errorf("bucket holds %v", keys)
+	}
+}
+
+func TestChangeGroup(t *testing.T) {
+	for key, want := range map[string]string{
+		"pagefind/fragment/en_1a2b.pf_fragment": "pagefind:fragment",
+		"pagefind/index/en_3c4d.pf_index":       "pagefind:index",
+		"pagefind/filter/en_5e.pf_filter":       "pagefind:filter",
+		"pagefind/pagefind.js":                  "pagefind",
+		"pagefind/pagefind-entry.json":          "pagefind",
+		"assets/_v/style.0a1b2c3d4e.css":        "assets",
+		"assets/photos/town hall.jpg":           "assets",
+		"index.html":                            "root",
+		"404.html":                              "root",
+		"sitemap.xml":                           "root",
+		"favicon.ico":                           "root",
+		".well-known/security.txt":              "root",
+		"about/index.html":                      "pages:/",
+		"us/index.html":                         "pages:/",
+		"us/texas/index.html":                   "pages:us",
+		"us/texas/houston/index.html":           "pages:us/texas",
+		"us/texas/districts/d1/index.html":      "pages:us/texas",
+		"tags/roads/index.html":                 "pages:tags",
+		"old.html":                              "root",
+		"guides/old.html":                       "pages:/",
+	} {
+		if got := changeGroup(key); got != want {
+			t.Errorf("changeGroup(%q) = %q, want %q", key, got, want)
+		}
+	}
+}
+
+func TestR2DeployExplainsChanges(t *testing.T) {
+	files := map[string]string{"index.html": "home v2", "new.html": "n"}
+	remote := func() map[string]string {
+		return map[string]string{"index.html": md5hex([]byte("home v1")), "gone.html": "x", "pagefind/fragment/en_old.pf_fragment": "y"}
+	}
+	f := newR2Fixture(t, files, remote())
+	if _, err := Run(context.Background(), f.cfg, &fakeRunner{}, zerolog.New(&f.logs).Level(zerolog.DebugLevel)); err != nil {
+		t.Fatal(err)
+	}
+	synced := f.logLine("Synced to R2")
+	if synced["added"] != 1.0 {
+		t.Errorf("added = %v, want 1 (new.html)", synced["added"])
+	}
+	if got, want := synced["uploaded_by"], map[string]any{"root": 2.0}; !reflect.DeepEqual(got, want) {
+		t.Errorf("uploaded_by = %v, want %v", got, want)
+	}
+	if got, want := synced["deleted_by"], map[string]any{"root": 1.0, "pagefind:fragment": 1.0}; !reflect.DeepEqual(got, want) {
+		t.Errorf("deleted_by = %v, want %v", got, want)
+	}
+	var changes []string
+	for line := range bytes.SplitSeq(bytes.TrimSpace(f.logs.Bytes()), []byte("\n")) {
+		var m map[string]any
+		if json.Unmarshal(line, &m) == nil && m["message"] == "R2 change" {
+			if m["level"] != "debug" {
+				t.Errorf("per-file line at %v", m["level"])
+			}
+			changes = append(changes, fmt.Sprint(m["op"], " ", m["reason"], " ", m["key"]))
+		}
+	}
+	want := []string{"upload changed index.html", "upload new new.html", "delete removed gone.html", "delete removed pagefind/fragment/en_old.pf_fragment"}
+	if !reflect.DeepEqual(changes, want) {
+		t.Errorf("per-file lines:\n%s\nwant:\n%s", strings.Join(changes, "\n"), strings.Join(want, "\n"))
+	}
+
+	// at info level, only the summary
+	f = newR2Fixture(t, files, remote())
+	if _, err := Run(context.Background(), f.cfg, &fakeRunner{}, zerolog.New(&f.logs).Level(zerolog.InfoLevel)); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(f.logs.String(), "R2 change") || f.logLine("Synced to R2")["uploaded_by"] == nil {
+		t.Errorf("info-level logs: %s", f.logs.String())
 	}
 }

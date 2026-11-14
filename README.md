@@ -463,6 +463,15 @@ deploy:
   `_redirects` are not uploaded: they are Pages control files, and R2 would
   serve them as ordinary files. Set cache headers and redirects as
   Cloudflare rules on the zone instead.
+- **What changed.** The `Synced to R2` log line counts `uploaded`,
+  `deleted`, `unchanged` and `added` (uploads the bucket didn't have), and
+  breaks uploads and deletes down by part of the site in `uploaded_by` and
+  `deleted_by`: `pagefind:fragment`, `pagefind:index` and so on for the
+  search index, `assets`, `root` for files at the top, and `pages:<folder>`
+  for pages under a folder (two levels at most, so `us/texas/houston/` and
+  everything deeper count as `pages:us/texas`). With `--debug`, each file
+  also gets an `R2 change` line: `op` upload or delete, `key`, and
+  `reason` new, changed, forced or removed.
 - **Mass-delete guard.** A build with no files, or one that would delete
   more than `max_delete_fraction` of the bucket's objects (beyond the first
   10), is refused before anything is uploaded: it usually means a broken
