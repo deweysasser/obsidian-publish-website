@@ -30,7 +30,7 @@ func TestNoLeak(t *testing.T) {
 			if _, err := Run(fixtureConfig(out, tgt), zerolog.Nop()); err != nil {
 				t.Fatal(err)
 			}
-			walkOutput(t, out, func(rel, s string) {
+			vendored := walkOutput(t, out, func(rel, s string) {
 				for _, f := range forbidden {
 					if strings.Contains(s, f) {
 						t.Errorf("%s contains %q", rel, f)
@@ -42,6 +42,7 @@ func TestNoLeak(t *testing.T) {
 					}
 				}
 			})
+			checkVendorSkipped(t, tgt, vendored)
 		})
 	}
 }
@@ -77,7 +78,7 @@ func TestNoLeakWithInclude(t *testing.T) {
 				t.Errorf("pages %d, want the 6 of TestBuildHTMLFixture plus the included note", rep.Pages)
 			}
 			var aliceFile, aliceContent, aliceLinked bool
-			walkOutput(t, out, func(rel, s string) {
+			vendored := walkOutput(t, out, func(rel, s string) {
 				aliceFile = aliceFile || strings.Contains(rel, "alice-smith")
 				aliceContent = aliceContent || strings.Contains(s, "Alice is the clerk")
 				aliceLinked = aliceLinked || aliceLink.MatchString(s)
@@ -92,6 +93,7 @@ func TestNoLeakWithInclude(t *testing.T) {
 					}
 				}
 			})
+			checkVendorSkipped(t, tgt, vendored)
 			if !aliceFile || !aliceContent || !aliceLinked {
 				t.Errorf("included note: file %v content %v linked %v", aliceFile, aliceContent, aliceLinked)
 			}
@@ -99,22 +101,41 @@ func TestNoLeakWithInclude(t *testing.T) {
 	}
 }
 
-// walkOutput calls check with each output file's path (relative to out)
-// and contents, skipping vendored assets. File paths are checked as
+// checkVendorSkipped fails if the html target's vendored assets weren't
+// recognised and skipped: then they would be scanned, or the skip would
+// match nothing on this OS.
+func checkVendorSkipped(t *testing.T, tgt string, vendored int) {
+	t.Helper()
+	if tgt == "html" && vendored == 0 {
+		t.Error("no vendored assets skipped in the html output")
+	}
+}
+
+// walkOutput calls check with each output file's path (relative to out,
+// with forward slashes on every OS) and contents, skipping vendored assets,
+// and returns how many vendored files it skipped. File paths are checked as
 // contents too, so a forbidden slug in a file name is caught.
-func walkOutput(t *testing.T, out string, check func(rel, s string)) {
+func walkOutput(t *testing.T, out string, check func(rel, s string)) (vendored int) {
 	t.Helper()
 	n := 0
 	err := filepath.WalkDir(out, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || strings.Contains(p, "/assets/vendor/") {
+		if err != nil || d.IsDir() {
 			return err
+		}
+		r, err := filepath.Rel(out, p)
+		if err != nil {
+			return err
+		}
+		rel := "/" + filepath.ToSlash(r)
+		if strings.Contains(rel, "/assets/vendor/") {
+			vendored++
+			return nil
 		}
 		b, err := os.ReadFile(p)
 		if err != nil {
 			return err
 		}
 		n++
-		rel := strings.TrimPrefix(p, out)
 		check(rel, rel+"\n"+string(b))
 		return nil
 	})
@@ -124,4 +145,5 @@ func walkOutput(t *testing.T, out string, check func(rel, s string)) {
 	if n < 5 {
 		t.Fatalf("only %d files written", n)
 	}
+	return vendored
 }
