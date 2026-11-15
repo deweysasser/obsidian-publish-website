@@ -29,6 +29,9 @@
 <meta name="twitter:card" content="summary">
 {{- end}}
 <link rel="icon" href="{{.Favicon}}">
+{{- if .Feed}}
+<link rel="alternate" type="application/atom+xml" title="{{.FeedTitle}}" href="{{.Feed}}">
+{{- end}}
 <link rel="stylesheet" href="{{.Style}}">
 {{- if .Search}}
 <link rel="stylesheet" href="{{.Base}}pagefind/pagefind-ui.css">
@@ -38,6 +41,9 @@
 {{- end}}
 {{- if .PageStyle}}
 <link rel="stylesheet" href="{{.PageStyle}}">
+{{- end}}
+{{- if .SiteStyle}}
+<link rel="stylesheet" href="{{.SiteStyle}}">
 {{- end}}
 </head>
 <body>
@@ -63,7 +69,7 @@
       {{- range .Crumbs}}<li><a href="{{.URL}}">{{.Name}}</a></li>{{end}}
     </ol>
     {{- end}}
-    <article {{if .Indexed}}data-pagefind-body{{end}}>
+    <article {{if .Indexed}}data-pagefind-body{{end}}{{with .CSSClasses}} class="{{.}}"{{end}}>
       <h1 class="page-title">{{.Title}}</h1>
       {{- if .Tags}}
       <p class="page-tags">{{range .Tags}}<a class="tag" href="{{.URL}}">{{.Name}}</a> {{end}}</p>

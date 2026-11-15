@@ -293,3 +293,75 @@ func TestNoSiteFooterByDefault(t *testing.T) {
 		t.Error("footer or support link without site.about/site.support")
 	}
 }
+
+func TestCSSClassesOnArticle(t *testing.T) {
+	out := t.TempDir()
+	cfg := &config.Config{Output: out, Search: "none", Site: config.Site{Title: "S"}}
+	tg, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var warnings []string
+	tg.Warn = func(w string) { warnings = append(warnings, w) }
+	site := &target.Site{Config: cfg, Tree: &target.FolderNode{}}
+	pages := []*render.Page{
+		{Slug: "list", URL: "/list/", Title: "L", SourcePath: "R/list.md",
+			Frontmatter: map[string]any{"cssclasses": []any{"post-list", "wide", "x\" onclick=\"y", "post-list"}}},
+		{Slug: "old", URL: "/old/", Title: "O", SourcePath: "R/old.md", Frontmatter: map[string]any{"cssclass": "a b"}},
+		{Slug: "plain", URL: "/plain/", Title: "P", SourcePath: "R/plain.md"},
+	}
+	for _, p := range pages {
+		if err := tg.WritePage(site, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for slug, want := range map[string]string{
+		"list":  `<article data-pagefind-body class="post-list wide">`,
+		"old":   `<article data-pagefind-body class="a b">`,
+		"plain": `<article data-pagefind-body>`, // unchanged without cssclasses
+	} {
+		if b := readOut(t, out, slug+"/index.html"); !strings.Contains(b, want) {
+			t.Errorf("%s lacks %s", slug, want)
+		}
+	}
+	// The hostile value splits into two names, neither a CSS identifier.
+	if len(warnings) != 2 || !strings.HasPrefix(warnings[0], `R/list.md: cssclasses "x\"`) || !strings.HasPrefix(warnings[1], `R/list.md: cssclasses "onclick=`) {
+		t.Errorf("warnings = %q, want one per unsafe name", warnings)
+	}
+}
+
+func TestSiteCSS(t *testing.T) {
+	vault, out := t.TempDir(), t.TempDir()
+	os.MkdirAll(filepath.Join(vault, "site"), 0o755)
+	os.WriteFile(filepath.Join(vault, "site/extra.css"), []byte(".post-list ul { list-style: none; }\n"), 0o644)
+	cfg := &config.Config{Vault: vault, Output: out, Search: "none", Site: config.Site{Title: "S", CSS: "site/extra.css"}}
+	tg, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	site := &target.Site{Config: cfg, Tree: &target.FolderNode{}}
+	if err := tg.WritePage(site, &render.Page{Slug: "p", URL: "/p/", Title: "P"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tg.Finalize(site); err != nil {
+		t.Fatal(err)
+	}
+	page := readOut(t, out, "p/index.html")
+	m := regexp.MustCompile(`<link rel="stylesheet" href="/(assets/_v/site\.[0-9a-f]{10}\.css)">`).FindStringSubmatchIndex(page)
+	if m == nil {
+		t.Fatalf("no versioned site stylesheet link:\n%s", page)
+	}
+	if own := strings.Index(page, "assets/_v/style."); own < 0 || own > m[0] {
+		t.Error("site stylesheet is not after the generator's own")
+	}
+	if got := readOut(t, out, page[m[2]:m[3]]); got != ".post-list ul { list-style: none; }\n" {
+		t.Errorf("published stylesheet = %q", got)
+	}
+
+	if _, err := New(&config.Config{Vault: vault, Output: out, Site: config.Site{CSS: "site/missing.css"}}); err == nil || !strings.Contains(err.Error(), "site.css") {
+		t.Errorf("missing site.css: err = %v", err)
+	}
+	if !strings.Contains(readOut(t, out, "404.html"), page[m[2]:m[3]]) {
+		t.Error("generated pages lack the site stylesheet")
+	}
+}

@@ -3,6 +3,7 @@ package html
 import (
 	"fmt"
 	"html/template"
+	"maps"
 	"net/url"
 	"os"
 	"path"
@@ -58,30 +59,71 @@ const redirectKey = "redirect_from"
 // hosts such as R2 can't answer with a real redirect, so this is a
 // meta refresh with a canonical link. It runs after every other file is
 // written and never replaces one: a path already taken is a warning.
+//
+// site.redirects entries go the same way, after every note's, so a note's
+// own redirect_from wins a clash.
 func (t *Target) writeRedirects(s *target.Site) error {
-	claimed := map[string]string{} // output file → the note redirecting there
+	claimed := map[string]string{} // output file → what redirects there
+	// redirect writes one redirect page; who names the setting in a warning.
+	redirect := func(who, from, title, to string) error {
+		rel, err := t.redirectFile(s, from)
+		if err != nil {
+			t.Warn(fmt.Sprintf("%s %q: %v", who, from, err))
+			return nil
+		}
+		if other, dup := claimed[rel]; dup {
+			t.Warn(fmt.Sprintf("%s %q: %s already redirects there", who, from, other))
+			return nil
+		}
+		if _, err := os.Stat(filepath.Join(t.out, filepath.FromSlash(rel))); err == nil {
+			t.Warn(fmt.Sprintf("%s %q: a published page or file is already at that URL", who, from))
+			return nil
+		}
+		claimed[rel] = who
+		return target.WriteFile(t.out, rel, t.redirectPage(title, to))
+	}
 	for _, p := range s.Pages {
 		for _, from := range frontmatterStrings(p.Frontmatter[redirectKey]) {
-			rel, err := t.redirectFile(s, from)
-			if err != nil {
-				t.Warn(fmt.Sprintf("%s: %s %q: %v", p.SourcePath, redirectKey, from, err))
-				continue
-			}
-			if other, dup := claimed[rel]; dup {
-				t.Warn(fmt.Sprintf("%s: %s %q: %s already redirects there", p.SourcePath, redirectKey, from, other))
-				continue
-			}
-			if _, err := os.Stat(filepath.Join(t.out, filepath.FromSlash(rel))); err == nil {
-				t.Warn(fmt.Sprintf("%s: %s %q: a published page or file is already at that URL", p.SourcePath, redirectKey, from))
-				continue
-			}
-			claimed[rel] = p.SourcePath
-			if err := target.WriteFile(t.out, rel, t.redirectPage(p.Title, p.URL)); err != nil {
+			if err := redirect(p.SourcePath+": "+redirectKey, from, p.Title, p.URL); err != nil {
 				return err
 			}
 		}
 	}
+	for _, from := range slices.Sorted(maps.Keys(s.Config.Site.Redirects)) {
+		to := s.Config.Site.Redirects[from]
+		title, dest, err := t.redirectTarget(s, to)
+		if err != nil {
+			t.Warn(fmt.Sprintf("site.redirects %q: %v", from, err))
+			continue
+		}
+		if err := redirect("site.redirects", from, title, dest); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// redirectTarget resolves a site.redirects target: a published note (path
+// relative to root) or a tag with a tag page.
+func (t *Target) redirectTarget(s *target.Site, to string) (title, dest string, err error) {
+	if strings.HasPrefix(to, "#") {
+		if s.Config.Site.TagHidden(to) {
+			return "", "", fmt.Errorf("tag %s is hidden, so it has no page", to)
+		}
+		for _, k := range []string{strings.ToLower(to), strings.ToLower(strings.TrimPrefix(to, "#"))} {
+			if len(s.Tags[k]) > 0 {
+				return to, t.scheme.TagURL(to), nil
+			}
+		}
+		return "", "", fmt.Errorf("no published note has tag %s", to)
+	}
+	src := path.Join(s.Config.Root, to)
+	for _, p := range s.Pages {
+		if p.SourcePath == src {
+			return p.Title, p.URL, nil
+		}
+	}
+	return "", "", fmt.Errorf("%q is not a published note", src)
 }
 
 // redirectFile maps an old URL path, relative to base_url ("/old/page/" or

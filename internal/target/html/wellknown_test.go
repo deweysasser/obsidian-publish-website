@@ -44,16 +44,22 @@ func TestNoSecurityTxtUnlessConfigured(t *testing.T) {
 
 func redirectSite(t *testing.T, pages ...*render.Page) (out string, warnings []string) {
 	t.Helper()
+	return redirectSiteWith(t, nil, nil, pages...)
+}
+
+// redirectSiteWith builds a site with site.redirects and the given tag pages.
+func redirectSiteWith(t *testing.T, redirects map[string]string, tags map[string][]*render.Page, pages ...*render.Page) (out string, warnings []string) {
+	t.Helper()
 	out = t.TempDir()
 	cfg := &config.Config{Output: out, Root: "R", Search: "none", Site: config.Site{Title: "S", BaseURL: "https://example.org/",
-		Suggest: &config.Suggest{Endpoint: "/api/suggest"}}}
+		Suggest: &config.Suggest{Endpoint: "/api/suggest"}, Redirects: redirects, HiddenTags: []string{"secret"}}}
 	cfg.ApplyDefaults()
 	tg, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tg.Warn = func(w string) { warnings = append(warnings, w) }
-	site := &target.Site{Config: cfg, Tree: &target.FolderNode{}, Pages: pages}
+	site := &target.Site{Config: cfg, Tree: &target.FolderNode{}, Pages: pages, Tags: tags}
 	for _, p := range pages {
 		if err := tg.WritePage(site, p); err != nil {
 			t.Fatal(err)
@@ -131,5 +137,45 @@ func TestRedirectFromNeverReplacesAFile(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(out), "escape")); err == nil {
 		t.Error("wrote outside the output directory")
+	}
+}
+
+func TestSiteRedirects(t *testing.T) {
+	post := &render.Page{Slug: "posts/hello", URL: "/posts/hello/", Title: "Hello", SourcePath: "R/Posts/Hello.md",
+		Frontmatter: map[string]any{"redirect_from": "/claimed/"}}
+	tags := map[string][]*render.Page{"#go": {post}}
+	out, warnings := redirectSiteWith(t, map[string]string{
+		"/categories/go/":   "#go",            // a tag page
+		"/categories/Go/":   "#Go",            // tags are case-insensitive
+		"/hello.html":       "Posts/Hello.md", // a note
+		"/claimed/":         "Posts/Hello.md", // a note's redirect_from wins
+		"/categories/none/": "#none",          // no note has the tag
+		"/categories/s/":    "#secret",        // hidden tag: no page
+		"/gone/":            "Posts/Gone.md",  // not a published note
+		"/posts/hello/":     "#go",            // a real page is never replaced
+	}, tags, post)
+	if !strings.Contains(readOut(t, out, "categories/go/index.html"), `url=/tags/go/`) {
+		t.Error("tag redirect missing")
+	}
+	if !strings.Contains(readOut(t, out, "categories/Go/index.html"), `url=/tags/go/`) {
+		t.Error("tag case not folded")
+	}
+	if !strings.Contains(readOut(t, out, "hello.html"), `url=/posts/hello/`) {
+		t.Error("note redirect missing")
+	}
+	want := []string{
+		`site.redirects "/categories/none/": no published note has tag #none`,
+		`site.redirects "/categories/s/": tag #secret is hidden, so it has no page`,
+		`site.redirects "/claimed/": R/Posts/Hello.md: redirect_from already redirects there`,
+		`site.redirects "/gone/": "R/Posts/Gone.md" is not a published note`,
+		`site.redirects "/posts/hello/": a published page or file is already at that URL`,
+	}
+	if strings.Join(warnings, "\n") != strings.Join(want, "\n") {
+		t.Errorf("warnings:\n%s\nwant:\n%s", strings.Join(warnings, "\n"), strings.Join(want, "\n"))
+	}
+	for _, f := range []string{"categories/none/index.html", "categories/s/index.html", "gone/index.html"} {
+		if _, err := os.Stat(filepath.Join(out, f)); err == nil {
+			t.Errorf("%s written for an unresolved target", f)
+		}
 	}
 }

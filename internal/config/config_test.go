@@ -292,15 +292,15 @@ func TestSuggestDefaultsAndValidation(t *testing.T) {
 	}
 
 	for body, want := range map[string]string{
-		"{endpoint: api/suggest}":                                     "site.suggest.endpoint",
-		"{endpoint: \"https://evil.example/x\"}":                      "site.suggest.endpoint",
-		"{endpoint: \"//evil.example/x\"}":                            "site.suggest.endpoint",
-		"{endpoint: \"/api/suggest?x=1\"}":                            "site.suggest.endpoint",
-		"{}":                                                          "site.suggest.endpoint",
-		"{endpoint: /s, kinds: [{id: Bad_ID, link: L}]}":              "kinds[0].id",
-		"{endpoint: /s, kinds: [{id: a, link: L}, {id: a, link: M}]}": "used twice",
-		"{endpoint: /s, kinds: [{id: a}]}":                            "kinds[0].link",
-		"{endpoint: /s, kinds: [{id: a, link: L, message: maybe}]}":   "kinds[0].message",
+		"{endpoint: api/suggest}":                                                                       "site.suggest.endpoint",
+		"{endpoint: \"https://evil.example/x\"}":                                                        "site.suggest.endpoint",
+		"{endpoint: \"//evil.example/x\"}":                                                              "site.suggest.endpoint",
+		"{endpoint: \"/api/suggest?x=1\"}":                                                              "site.suggest.endpoint",
+		"{}":                                                                                            "site.suggest.endpoint",
+		"{endpoint: /s, kinds: [{id: Bad_ID, link: L}]}":                                                "kinds[0].id",
+		"{endpoint: /s, kinds: [{id: a, link: L}, {id: a, link: M}]}":                                   "used twice",
+		"{endpoint: /s, kinds: [{id: a}]}":                                                              "kinds[0].link",
+		"{endpoint: /s, kinds: [{id: a, link: L, message: maybe}]}":                                     "kinds[0].message",
 		"{endpoint: /s, kinds: [{id: a, link: L, fields: [{name: page, label: P}]}]}":                   "built into every kind",
 		"{endpoint: /s, kinds: [{id: a, link: L, fields: [{name: contact, label: P}]}]}":                "built into every kind",
 		"{endpoint: /s, kinds: [{id: a, link: L, fields: [{name: 9x, label: P}]}]}":                     "fields[0].name",
@@ -398,5 +398,71 @@ func TestInclude(t *testing.T) {
 		Include: []Include{{Path: "Team/**", Tags: []string{"a"}}, {Path: "x", Tags: []string{"b"}}, {Path: "y", Tags: []string{"b c"}}}}
 	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "include[2].tags") || strings.Contains(err.Error(), "include[0]") {
 		t.Errorf("index in message: %v", err)
+	}
+}
+
+func TestSiteRedirects(t *testing.T) {
+	c, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: {redirects: {\"/categories/go/\": \"#go\", \"/old.html\": \"Pages/About.md\"}}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Site.Redirects["/categories/go/"] != "#go" || c.Site.Redirects["/old.html"] != "Pages/About.md" {
+		t.Errorf("redirects = %v", c.Site.Redirects)
+	}
+	for body, want := range map[string]string{
+		`{"old/": "A.md"}`:     `"old/" must be a path on this site`,
+		`{"/a/": ""}`:          `must be a note path relative to root, or a #tag`,
+		`{"/a/": "/abs.md"}`:   `must be a note path relative to root, or a #tag`,
+		`{"/a/": "../up.md"}`:  `must be a note path relative to root, or a #tag`,
+		`{"/a/": "x/./y.md"}`:  `must be a note path relative to root, or a #tag`,
+		`{"/a/": "#two tags"}`: `is not a tag`,
+		`{"/a/": "#"}`:         `is not a tag`,
+	} {
+		if _, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: {redirects: "+body+"}\n")); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want %q", body, err, want)
+		}
+	}
+	if _, err := Load(writeConfig(t, "vault: /v\nroot: R\ntarget: hugo\nsite: {redirects: {\"/a/\": \"A.md\"}}\n")); err == nil || !strings.Contains(err.Error(), "needs the html target") {
+		t.Errorf("hugo target: err = %v", err)
+	}
+}
+
+func TestSiteCSS(t *testing.T) {
+	if _, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: {css: site/extra.css}\n")); err != nil {
+		t.Fatal(err)
+	}
+	for _, css := range []string{"/abs.css", "../up.css", "a/./b.css", "style.scss"} {
+		if _, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: {css: \""+css+"\"}\n")); err == nil || !strings.Contains(err.Error(), "site.css") {
+			t.Errorf("%s: err = %v", css, err)
+		}
+	}
+	if _, err := Load(writeConfig(t, "vault: /v\nroot: R\ntarget: hugo\nsite: {css: a.css}\n")); err == nil || !strings.Contains(err.Error(), "needs the html target") {
+		t.Errorf("hugo target: err = %v", err)
+	}
+}
+
+func TestFeedDefaultsAndValidation(t *testing.T) {
+	c, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: {base_url: \"https://x.io/\", feed: {from: /Posts/}}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f := c.Site.Feed; f.Path != "feed.xml" || f.From != "Posts" || f.Date != "date" || f.Limit != 20 || f.Content != "summary" {
+		t.Errorf("defaults = %+v", f)
+	}
+	for body, want := range map[string]string{
+		`{from: Posts, path: /feed.xml}`:   "site.feed.path",
+		`{from: Posts, path: ../feed.xml}`: "site.feed.path",
+		`{from: Posts, path: feeds/}`:      "site.feed.path",
+		`{}`:                               "site.feed.from",
+		`{from: ../Posts}`:                 "site.feed.from",
+		`{from: Posts, limit: -1}`:         "site.feed.limit",
+		`{from: Posts, content: excerpt}`:  "site.feed.content",
+	} {
+		if _, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: {base_url: \"https://x.io/\", feed: "+body+"}\n")); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want %q", body, err, want)
+		}
+	}
+	if _, err := Load(writeConfig(t, "vault: /v\nroot: R\nsite: {base_url: /sub/, feed: {from: Posts}}\n")); err == nil || !strings.Contains(err.Error(), "absolute site.base_url") {
+		t.Errorf("relative base_url: err = %v", err)
 	}
 }

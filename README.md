@@ -134,6 +134,17 @@ site:
     # expires_days: 180                # Expires = build date + this (at most 365)
     # policy: https://example.github.io/disclosure/
     # preferred_languages: en
+  css: Attachments/site.css            # optional, relative to the vault: a stylesheet loaded after the generator's own
+  feed:                                # optional: an Atom feed of one folder's notes (html target; absolute base_url)
+    from: Posts                        # folder relative to root; its notes (and subfolders') are the entries
+    # path: feed.xml                   # where it is written, relative to base_url (default)
+    # date: date                       # frontmatter field with each entry's date (default)
+    # limit: 20                        # newest entries kept (default)
+    # title: Town Notes                # default site.title; author: likewise
+    # content: summary                 # summary (default) or full
+  redirects:                           # optional: old URLs no note can claim with redirect_from
+    /categories/roads/: "#roads"       # to a tag's page
+    /old-about.html: About.md          # to a note, relative to root
 html:
   template_dir: ./templates            # optional: override layout.html
 hugo:
@@ -202,6 +213,46 @@ given, a `Canonical` line, and `Expires` set to the build date plus
 expired file; one that stops being rebuilt lets it lapse, as the RFC
 intends.
 
+#### Styling notes
+
+A note's Obsidian `cssclasses` (or the older `cssclass`) go on its
+`<article>`, the element that holds the note's content, much as Obsidian
+puts them on the note's view. One CSS snippet can then serve both the vault
+and the site. `site.css` names a stylesheet in the vault that every page
+loads after the generator's own, published under a content-hashed name so
+browsers can cache it. For example, to drop the bullets from a list made by
+a Dataview `LIST`:
+
+```css
+/* Attachments/site.css, and a snippet in .obsidian/snippets/ for the vault */
+.post-list .dataview.list-view-ul { list-style: none; padding-left: 0; }
+```
+
+```yaml
+---
+cssclasses: [post-list]
+---
+```
+
+Class names must be plain CSS identifiers (letters, digits, `-` and `_`);
+others are left off with a warning. `url()` references in `site.css` are
+not rewritten, so use absolute URLs or `data:` URIs.
+
+#### Atom feed
+
+With `site.feed`, the build writes an [Atom](https://www.rfc-editor.org/rfc/rfc4287)
+feed of the notes in one folder, and every page links it with
+`<link rel="alternate" type="application/atom+xml">`. Entries are newest
+first by the `date` field (a YAML date, or a string like `2026-11-15` or
+`2026-11-15T09:30:00-05:00`; a date without a zone is UTC), each with the
+note's title, URL and summary (its description, as for the meta
+description). With `content: full` each entry also carries the rendered
+note, its root-relative links made absolute. The folder's own folder note
+is not an entry; a note without a usable date is left out with a warning,
+never given the build time. The feed's own `updated` is its newest entry's
+date, so a rebuild of an unchanged vault writes the same file. To keep an
+old site's subscribers, set `path` to its old feed's path.
+
 #### Moved notes
 
 A note that moved keeps its old URLs working with a `redirect_from` list
@@ -222,6 +273,13 @@ old URL that is already a page or file of the site, under a generated
 folder (`/assets/`, `/tags/`, `/pagefind/`, `/suggest/`, `/.well-known/`),
 or claimed by another note is skipped with a warning. The hugo and jekyll
 targets ignore the key.
+
+Old URLs that no note can claim, such as an old site's category pages, go
+in `site.redirects` instead: each old path maps to a note (relative to
+`root`) or a tag (`"#name"`, quoted in YAML). They get the same redirect
+pages and checks, after every note's `redirect_from`, so a note's own claim
+wins. A target that is not a published note, or a tag with no page (no
+published note has it, or it is hidden), is a warning.
 
 ### hugo
 
