@@ -68,10 +68,14 @@ func TestEmbedCycleAndExcluded(t *testing.T) {
 		t.Errorf("cycle:\n%s", got)
 	}
 
-	r, _ = fixtureRenderer(t)
+	r, warns := fixtureRenderer(t)
 	got = pre(t, r, "![[Alice Smith]]")
 	if !strings.Contains(got, "Not published") || strings.Contains(got, "Clerk") || strings.Contains(got, "alice") {
 		t.Errorf("excluded embed:\n%s", got)
+	}
+	// Like an unpublished attachment, an unpublished note is a build warning.
+	if len(*warns) != 1 || !strings.Contains((*warns)[0].msg, `embedded note "Alice Smith" is not published`) {
+		t.Errorf("excluded embed warnings = %+v, want one naming the note", *warns)
 	}
 }
 
