@@ -145,19 +145,19 @@ func TestSiteRedirects(t *testing.T) {
 		Frontmatter: map[string]any{"redirect_from": "/claimed/"}}
 	tags := map[string][]*render.Page{"#go": {post}}
 	out, warnings := redirectSiteWith(t, map[string]string{
-		"/categories/go/":   "#go",            // a tag page
-		"/categories/Go/":   "#Go",            // tags are case-insensitive
-		"/hello.html":       "Posts/Hello.md", // a note
-		"/claimed/":         "Posts/Hello.md", // a note's redirect_from wins
-		"/categories/none/": "#none",          // no note has the tag
-		"/categories/s/":    "#secret",        // hidden tag: no page
-		"/gone/":            "Posts/Gone.md",  // not a published note
-		"/posts/hello/":     "#go",            // a real page is never replaced
+		"/categories/go/":     "#go",            // a tag page
+		"/categories/golang/": "#Go",            // tags are case-insensitive
+		"/hello.html":         "Posts/Hello.md", // a note
+		"/claimed/":           "Posts/Hello.md", // a note's redirect_from wins
+		"/categories/none/":   "#none",          // no note has the tag
+		"/categories/s/":      "#secret",        // hidden tag: no page
+		"/gone/":              "Posts/Gone.md",  // not a published note
+		"/posts/hello/":       "#go",            // a real page is never replaced
 	}, tags, post)
 	if !strings.Contains(readOut(t, out, "categories/go/index.html"), `url=/tags/go/`) {
 		t.Error("tag redirect missing")
 	}
-	if !strings.Contains(readOut(t, out, "categories/Go/index.html"), `url=/tags/go/`) {
+	if !strings.Contains(readOut(t, out, "categories/golang/index.html"), `url=/tags/go/`) {
 		t.Error("tag case not folded")
 	}
 	if !strings.Contains(readOut(t, out, "hello.html"), `url=/posts/hello/`) {
