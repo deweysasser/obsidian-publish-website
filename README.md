@@ -533,6 +533,104 @@ Both targets may be configured at once; Pages runs first. R2 logs
 the sync failed), then, on success, `Deployed` with `url`, `uploaded`,
 `deleted`, `unchanged`, `purged` and `elapsed_ms`.
 
+### Deploying with git (example)
+
+Hosts that serve a git repository, such as GitHub Pages, have no deploy
+target here: git itself does the comparing and keeps the history. Committing
+each build, rather than force-pushing a single-commit branch, keeps every
+published version, so a bad build (a generator or Dataview upgrade, a
+template change) is undone with `git revert`. A rebuild of an unchanged vault
+produces the same files, so it makes no commit. The exceptions are output
+that changes by date: `site.security_txt`'s `Expires` line, and Dataview
+queries using `date(today)`.
+
+This script is a starting point, not a supported feature. It needs `git`
+and `rsync`, and the git credentials and identity of whoever runs it.
+
+```bash
+#!/usr/bin/env bash
+# Commit an obsidian-publish-website build into a git repository and push it.
+# Usage: deploy-git.sh BUILD_DIR REPO BRANCH PATH CONFIG [--allow-mass-delete]
+#   BUILD_DIR  the build output (site.output)
+#   REPO       repository URL, e.g. git@github.com:<owner>/<repo>.git
+#   BRANCH     branch the host serves from
+#   PATH       directory in the repository that holds the site ("." for the root)
+#   CONFIG     the publish.yaml used for the build (its hash goes in the commit)
+set -euo pipefail
+
+build=$1 repo=$2 branch=$3 dest=$4 config=$5 allow=${6:-}
+max_delete_fraction=0.25   # refuse to delete more of the published pages
+delete_floor=10            # always allow this many deletes
+
+# Only publish a directory the generator built, and never an empty build.
+[ -f "$build/.obsidian-publish" ] || { echo "$build was not built by obsidian-publish-website" >&2; exit 1; }
+[ -n "$(find "$build" -name '*.html' -print -quit)" ] || { echo "$build has no pages" >&2; exit 1; }
+
+# Record the toolchain, so git log shows what produced each version and a
+# regression can be bisected. The generator's version pins Dataview's.
+# Taken now, before the cd below, so a failure stops the run.
+version=$(obsidian-publish-website --version)
+config_hash=$(sha256sum "$config" | cut -d' ' -f1)
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+git clone --quiet --depth 1 --branch "$branch" "$repo" "$work/repo"
+
+# Replace PATH with the build. The marker and Cloudflare Pages control files
+# would be served as ordinary files, so they are left out. --checksum,
+# because a fresh clone's timestamps say nothing about content.
+mkdir -p "$work/repo/$dest"
+rsync -a --checksum --delete --exclude=/.git \
+  --exclude=/.obsidian-publish --exclude=/_headers --exclude=/_redirects \
+  "$build/" "$work/repo/$dest/"
+
+cd "$work/repo"
+git add -A -- "$dest"
+if git diff --cached --quiet; then
+  echo "No changes to publish"
+  exit 0
+fi
+
+# Mass-delete guard: a broken build (an unmounted vault, a bad exclude)
+# usually shows up as most pages disappearing.
+total=$(git ls-tree -r --name-only HEAD -- "$dest" | grep -c '\.html$' || true)
+deleted=$(git diff --cached --diff-filter=D --name-only -- "$dest" | grep -c '\.html$' || true)
+if [ "$allow" != --allow-mass-delete ] && [ "$deleted" -gt "$delete_floor" ] &&
+   awk -v d="$deleted" -v t="$total" -v f="$max_delete_fraction" 'BEGIN { exit !(d > t * f) }'; then
+  echo "Refusing: the build would delete $deleted of $total pages; rerun with --allow-mass-delete if intended" >&2
+  exit 1
+fi
+
+git commit --quiet -m "Publish site" -m "Generator: obsidian-publish-website $version
+Config-SHA256: $config_hash"
+
+# Never force: if something else pushed first, stop and let a person look.
+git push --quiet origin "HEAD:$branch"
+echo "Published $(git rev-parse --short HEAD)"
+```
+
+- **The repository's own files.** With `PATH` set to `.`, `--delete` also
+  removes anything in the repository that the build doesn't produce, such
+  as a README or a workflow file under `.github/`. Keep the site in a
+  subdirectory, and have the host serve that directory.
+- **Credentials.** Use a deploy key with write access to that one
+  repository. To keep it out of long-term storage, fetch it for the run and
+  point git at it, for example with 1Password:
+
+  ```bash
+  umask 077
+  key=$(mktemp)
+  trap 'rm -f "$key"' EXIT
+  op read --force --out-file "$key" "op://<vault>/<item>/private key?ssh-format=openssh"
+  export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+  ```
+
+  `StrictHostKeyChecking=yes` needs the host's published keys in
+  `known_hosts` beforehand. Never accept an unknown host key on first use.
+- **One deploy at a time.** Two runs at once both fetch the same commit, and
+  the second push is rejected. That is safe, but a scheduler should not
+  start one while the last is still running.
+
 ### External tools
 
 Pagefind and wrangler run, by default, from a container image built on first
