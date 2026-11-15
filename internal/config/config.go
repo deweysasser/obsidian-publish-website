@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"net/url"
 	"os"
@@ -29,6 +30,9 @@ type Site struct {
 	// Favicon is an image in the vault (path relative to the vault root);
 	// a generic icon is used when empty.
 	Favicon string `yaml:"favicon"`
+	// CSS is a stylesheet in the vault (path relative to the vault root),
+	// loaded on every page after the generator's own (html target).
+	CSS string `yaml:"css"`
 	// HiddenTags are organizing tags left off the site (case-insensitive,
 	// '#' optional; hiding "a" also hides "a/b").
 	HiddenTags []string `yaml:"hidden_tags"`
@@ -48,6 +52,14 @@ type Site struct {
 	// SecurityTxt, when set, publishes /.well-known/security.txt (RFC 9116)
 	// telling security researchers how to report a problem (html target).
 	SecurityTxt *SecurityTxt `yaml:"security_txt"`
+	// Feed, when set, publishes an Atom feed of the notes in one folder
+	// (html target).
+	Feed *Feed `yaml:"feed"`
+	// Redirects sends old URLs that no note can claim with redirect_from
+	// (such as an old site's category pages) on to a note (path relative to
+	// root, like site.about) or a tag ("#name"): old path → target (html
+	// target).
+	Redirects map[string]string `yaml:"redirects"`
 }
 
 // SecurityTxt configures /.well-known/security.txt. Its Expires field is
@@ -65,6 +77,69 @@ type SecurityTxt struct {
 	// PreferredLanguages is an optional comma-separated list of language
 	// tags, such as "en, es".
 	PreferredLanguages string `yaml:"preferred_languages"`
+}
+
+// Feed configures the Atom feed. Its entries are the notes in From (and
+// its subfolders), newest first by the Date field; the folder's own folder
+// note is not an entry.
+type Feed struct {
+	// Path is where the feed is written, relative to base_url. Default
+	// "feed.xml".
+	Path string `yaml:"path"`
+	// From is the folder, relative to root, whose notes are entries.
+	From string `yaml:"from"`
+	// Date is the frontmatter field holding each entry's date. A note
+	// without a usable one is left out with a warning. Default "date".
+	Date string `yaml:"date"`
+	// Limit is how many of the newest notes are entries. Default 20.
+	Limit int `yaml:"limit"`
+	// Title is the feed's title; default site.title.
+	Title string `yaml:"title"`
+	// Author is the feed's author; default site.title.
+	Author string `yaml:"author"`
+	// Content is "summary" (default: each note's description, or its first
+	// substantial paragraph) or "full" (the rendered note as well).
+	Content string `yaml:"content"`
+}
+
+func (f *Feed) applyDefaults() {
+	if f.Path == "" {
+		f.Path = "feed.xml"
+	}
+	if f.Date == "" {
+		f.Date = "date"
+	}
+	if f.Limit == 0 {
+		f.Limit = 20
+	}
+	if f.Content == "" {
+		f.Content = "summary"
+	}
+	f.From = strings.Trim(f.From, "/")
+}
+
+func (f *Feed) validate(c *Config) []error {
+	var errs []error
+	if p := f.Path; path.IsAbs(p) || path.Clean(p) != p || strings.HasPrefix(p, "..") || strings.HasSuffix(p, "/") {
+		errs = append(errs, fmt.Errorf("site.feed.path %q must be a clean file path relative to base_url, like feed.xml", p))
+	}
+	if f.From == "" || path.Clean(f.From) != f.From || strings.HasPrefix(f.From, "..") {
+		errs = append(errs, fmt.Errorf("site.feed.from %q must be a folder relative to root", f.From))
+	}
+	if f.Limit < 1 {
+		errs = append(errs, fmt.Errorf("site.feed.limit %d must be at least 1", f.Limit))
+	}
+	if f.Content != "summary" && f.Content != "full" {
+		errs = append(errs, fmt.Errorf("site.feed.content %q must be summary or full", f.Content))
+	}
+	if c.Target != "html" {
+		errs = append(errs, errors.New("site.feed needs the html target"))
+	}
+	// Atom needs absolute links and IDs.
+	if u, err := url.Parse(c.Site.BaseURL); err != nil || u.Scheme == "" || u.Host == "" {
+		errs = append(errs, fmt.Errorf("site.feed needs an absolute site.base_url, like https://example.org/"))
+	}
+	return errs
 }
 
 // DefaultSecurityTxtDays is SecurityTxt.ExpiresDays when unset.
@@ -476,6 +551,9 @@ func (c *Config) ApplyDefaults() {
 	if sg := c.Site.Suggest; sg != nil {
 		sg.applyDefaults()
 	}
+	if f := c.Site.Feed; f != nil {
+		f.applyDefaults()
+	}
 	if st := c.Site.SecurityTxt; st != nil && st.ExpiresDays == 0 {
 		st.ExpiresDays = DefaultSecurityTxtDays
 	}
@@ -560,6 +638,34 @@ func (c *Config) Validate() error {
 	for name, a := range notePaths {
 		if a != "" && (path.IsAbs(a) || path.Clean(a) != a || strings.HasPrefix(a, "..")) {
 			errs = append(errs, fmt.Errorf("%s %q must be a clean path relative to root", name, a))
+		}
+	}
+	if f := c.Site.Feed; f != nil {
+		errs = append(errs, f.validate(c)...)
+	}
+	if css := c.Site.CSS; css != "" {
+		if path.IsAbs(css) || path.Clean(css) != css || strings.HasPrefix(css, "..") || strings.ToLower(path.Ext(css)) != ".css" {
+			errs = append(errs, fmt.Errorf("site.css %q must be a .css file, as a clean path relative to the vault", css))
+		}
+		if c.Target != "html" {
+			errs = append(errs, errors.New("site.css needs the html target"))
+		}
+	}
+	if len(c.Site.Redirects) > 0 && c.Target != "html" {
+		errs = append(errs, errors.New("site.redirects needs the html target"))
+	}
+	for _, from := range slices.Sorted(maps.Keys(c.Site.Redirects)) {
+		to := c.Site.Redirects[from]
+		if !strings.HasPrefix(from, "/") {
+			errs = append(errs, fmt.Errorf("site.redirects %q must be a path on this site, like /old/page/", from))
+		}
+		switch {
+		case strings.HasPrefix(to, "#"):
+			if !validTag(to) {
+				errs = append(errs, fmt.Errorf("site.redirects %q: %q is not a tag", from, to))
+			}
+		case to == "" || path.IsAbs(to) || path.Clean(to) != to || strings.HasPrefix(to, ".."):
+			errs = append(errs, fmt.Errorf("site.redirects %q: %q must be a note path relative to root, or a #tag", from, to))
 		}
 	}
 	if mp := c.Site.Maps; mp != nil && mp.PlaceTag != "" && !validTag(mp.PlaceTag) {

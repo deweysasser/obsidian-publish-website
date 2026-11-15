@@ -11,8 +11,11 @@ import (
 	"html/template"
 	"io/fs"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -45,6 +48,9 @@ type Target struct {
 	// versioned maps a static asset to its content-addressed copy, which
 	// browsers may cache forever.
 	versioned map[string]string
+	// siteCSS is where site.css is published (content-addressed), and
+	// siteCSSBody its contents; "" without site.css.
+	siteCSS, siteCSSBody string
 	// Warn receives non-fatal problems.
 	Warn func(string)
 	// now is the build time (security.txt's Expires); a field for tests.
@@ -101,7 +107,39 @@ func New(cfg *config.Config) (*Target, error) {
 		ext := path.Ext(name)
 		t.versioned[name] = "assets/_v/" + strings.TrimSuffix(name, ext) + "." + hex.EncodeToString(sum[:5]) + ext
 	}
+	if rel := cfg.Site.CSS; rel != "" {
+		b, err := os.ReadFile(filepath.Join(cfg.Vault, filepath.FromSlash(rel))) // #nosec G304 -- a file in the vault the config names
+		if err != nil {
+			return nil, fmt.Errorf("site.css: %w", err)
+		}
+		sum := sha256.Sum256(b)
+		t.siteCSS, t.siteCSSBody = "assets/_v/site."+hex.EncodeToString(sum[:5])+".css", string(b)
+	}
 	return t, nil
+}
+
+// cssClassRe is a CSS class name that needs no escaping in a selector.
+var cssClassRe = regexp.MustCompile(`^-?[_a-zA-Z][_a-zA-Z0-9-]*$`)
+
+// cssClasses returns a note's Obsidian cssclasses (or the older cssclass)
+// as a class attribute value. Names that aren't plain CSS identifiers are
+// left off with a warning.
+func (t *Target) cssClasses(p *render.Page) string {
+	var out []string
+	for _, key := range []string{"cssclasses", "cssclass"} {
+		for _, v := range frontmatterStrings(p.Frontmatter[key]) {
+			for _, c := range strings.Fields(v) {
+				if !cssClassRe.MatchString(c) {
+					t.Warn(fmt.Sprintf("%s: %s %q is not a CSS class name", p.SourcePath, key, c))
+					continue
+				}
+				if !slices.Contains(out, c) {
+					out = append(out, c)
+				}
+			}
+		}
+	}
+	return strings.Join(out, " ")
 }
 
 func (t *Target) Scheme() urls.Scheme { return t.scheme }
@@ -135,6 +173,12 @@ type view struct {
 	NoIndex bool
 	// PageStyle and PageScript are assets only this page loads.
 	PageStyle, PageScript string
+	// SiteStyle is the site's own stylesheet (site.css), loaded last.
+	SiteStyle string
+	// CSSClasses are the note's Obsidian cssclasses, on its <article>.
+	CSSClasses string
+	// Feed is the site's Atom feed (site.feed), linked from every page.
+	Feed, FeedTitle string
 }
 
 func (t *Target) write(s *target.Site, slug string, v view, current string) error {
@@ -153,6 +197,15 @@ func (t *Target) write(s *target.Site, slug string, v view, current string) erro
 		}
 	}
 	v.Style, v.Script = t.base+t.versioned["style.css"], t.base+t.versioned["app.js"]
+	if t.siteCSS != "" {
+		v.SiteStyle = t.base + t.siteCSS
+	}
+	if f := s.Config.Site.Feed; f != nil {
+		v.Feed, v.FeedTitle = t.feedURL(s), f.Title
+		if v.FeedTitle == "" {
+			v.FeedTitle = s.Config.Site.Title
+		}
+	}
 	v.Favicon = t.base + "assets/favicon.svg"
 	if f := s.Config.Site.Favicon; f != "" {
 		v.Favicon = t.base + faviconName(f)
@@ -193,6 +246,7 @@ func (t *Target) WritePage(s *target.Site, p *render.Page) error {
 	// #nosec G203 -- rendered Markdown; raw HTML in a note is deliberately kept (the vault is the author's)
 	v := view{Title: p.Title, Content: template.HTML(p.HTML), TOC: tocWithout(p.TOC), Backlinks: p.Backlinks,
 		Crumbs: crumbs(s, p.SourcePath, p.Slug), Indexed: true, Description: describe(p), Image: shareImage(p.HTML)}
+	v.CSSClasses = t.cssClasses(p)
 	if !p.Mtime.IsZero() {
 		v.Modified = p.Mtime.Format("2006-01-02")
 	}
@@ -280,7 +334,15 @@ func (t *Target) Finalize(s *target.Site) error {
 	}); err != nil {
 		return err
 	}
+	if t.siteCSS != "" {
+		if err := target.WriteFile(t.out, t.siteCSS, []byte(t.siteCSSBody)); err != nil {
+			return err
+		}
+	}
 	if err := target.WriteFile(t.out, "_headers", []byte(cacheHeaders)); err != nil {
+		return err
+	}
+	if err := t.writeFeed(s); err != nil {
 		return err
 	}
 	// last, so a redirect can never replace a page or file written above
