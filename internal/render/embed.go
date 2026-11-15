@@ -84,6 +84,7 @@ func isDigits(s string) bool {
 func (r *Renderer) embedNote(l index.Link, line int, ctx Context) string {
 	slug, ok := r.Pub.Pages[l.Path]
 	if !ok {
+		r.Warn(ctx.Path, line, fmt.Sprintf("embedded note %q is not published", l.Raw))
 		return `<div class="embed embed-missing">Not published</div>`
 	}
 	max := r.MaxEmbedDepth
