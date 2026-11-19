@@ -7,8 +7,10 @@ Only the parts of the `obsidian` module the engine touches are stubbed
 (`stubs/`). The Go side supplies Obsidian-equivalent `CachedMetadata`
 (`internal/obsmeta`).
 
-Protocol: one JSON request on stdin (`settings`, `files[]`, `attachments[]`,
-`aliases{}`, `requests[]`), one JSON response on stdout (`results[]`); see
+Protocol: JSON lines. On stdin, a header (`settings`, `files` (the note count),
+`attachments[]`, `paths[]`, `aliases{}`, `requests[]`), then one line per note;
+on stdout, one line per result. One JSON document would not do: Node cannot
+hold a string over ~512 MiB, which a large vault's request exceeds. See
 `entry.ts`.
 
 ## Rebuild / upgrade Dataview

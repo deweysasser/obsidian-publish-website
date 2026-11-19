@@ -3,11 +3,13 @@
 package dataview
 
 import (
+	"bufio"
 	"bytes"
 	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -76,7 +78,8 @@ type File struct {
 	Metadata *obsmeta.CachedMetadata `json:"metadata"`
 }
 
-// Input is the full bridge request.
+// Input is the full bridge request. It is sent as JSON lines (writeInput),
+// not as one document.
 type Input struct {
 	Settings    map[string]any    `json:"settings"`
 	Files       []File            `json:"files"`
@@ -188,10 +191,6 @@ func (e *Engine) run(in Input) (map[string]Result, error) {
 	if in.Settings == nil {
 		in.Settings = map[string]any{}
 	}
-	payload, err := json.Marshal(in)
-	if err != nil {
-		return nil, err
-	}
 	// .cjs: a stray package.json with "type":"module" in TMPDIR must not
 	// change how Node loads the CommonJS bundle.
 	f, err := os.CreateTemp("", "obsidian-publish-dataview-*.cjs")
@@ -207,26 +206,72 @@ func (e *Engine) run(in Input) (map[string]Result, error) {
 		return nil, err
 	}
 	cmd := exec.Command(e.Node, f.Name()) // #nosec G204 -- node found by FindNode; our own temp file
-	cmd.Stdin = bytes.NewReader(payload)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("dataview bridge: %w", err)
+	}
+	writeErr := writeInput(stdin, in)
+	if err := stdin.Close(); writeErr == nil {
+		writeErr = err
+	}
+	// A bridge that dies early also breaks the pipe; its own error says why.
+	if err := cmd.Wait(); err != nil {
 		return nil, fmt.Errorf("dataview bridge failed: %v: %s", err, strings.TrimSpace(stderr.String()))
 	}
-	var out struct {
-		Results []Result `json:"results"`
-	}
-	if err := json.Unmarshal(stdout.Bytes(), &out); err != nil {
-		return nil, fmt.Errorf("dataview bridge output: %w", err)
+	if writeErr != nil {
+		return nil, fmt.Errorf("dataview bridge input: %w", writeErr)
 	}
 	res := map[string]Result{}
-	for _, r := range out.Results {
+	dec := json.NewDecoder(&stdout)
+	for {
+		var r Result
+		if err := dec.Decode(&r); errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			return nil, fmt.Errorf("dataview bridge output: %w", err)
+		}
 		if r.Type == "task" {
 			r.TaskGroups = decodeTasks(r.RawTasks)
 		}
 		res[r.ID] = r
 	}
 	return res, nil
+}
+
+// inputHeader is the first line of the bridge request: everything but the
+// notes, plus how many note lines follow.
+type inputHeader struct {
+	Settings    map[string]any    `json:"settings"`
+	Files       int               `json:"files"`
+	Attachments []string          `json:"attachments"`
+	Paths       []string          `json:"paths"`
+	Aliases     map[string]string `json:"aliases"`
+	Requests    []Request         `json:"requests"`
+}
+
+// writeInput sends the request as JSON lines: the header, then one line per
+// note. Node cannot hold a string longer than about 512 MiB, so a single JSON
+// document of a large vault cannot be read at all (it failed at ~32,000 notes).
+// Line by line, only the largest single note has to fit.
+func writeInput(w io.Writer, in Input) error {
+	bw := bufio.NewWriterSize(w, 1<<20)
+	enc := json.NewEncoder(bw)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(inputHeader{Settings: in.Settings, Files: len(in.Files), Attachments: in.Attachments,
+		Paths: in.Paths, Aliases: in.Aliases, Requests: in.Requests}); err != nil {
+		return err
+	}
+	for i := range in.Files {
+		if err := enc.Encode(&in.Files[i]); err != nil {
+			return err
+		}
+	}
+	return bw.Flush()
 }
 
 // decodeTasks accepts either a flat task list or [{key, rows}] groupings.

@@ -12628,7 +12628,7 @@ function defaultLinkHandler(index, origin) {
 }
 
 // entry.ts
-var fs = __toESM(require("fs"));
+var readline = __toESM(require("readline"));
 function buildVault(paths) {
   const root = new TFolder("/", "", null);
   const byPath = /* @__PURE__ */ new Map([["/", root], ["", root]]);
@@ -12753,8 +12753,20 @@ function encodeGrouping(g, settings) {
   }
   return g;
 }
+async function readRequest() {
+  let header = null;
+  const files = [];
+  for await (const line of readline.createInterface({ input: process.stdin, crlfDelay: Infinity })) {
+    if (line === "") continue;
+    if (header === null) header = JSON.parse(line);
+    else files.push(JSON.parse(line));
+  }
+  if (header === null) throw new Error("no request on stdin");
+  if (files.length !== header.files) throw new Error(`request truncated: expected ${header.files} notes, got ${files.length}`);
+  return { ...header, files };
+}
 async function main() {
-  const req = JSON.parse(fs.readFileSync(0, "utf8"));
+  const req = await readRequest();
   const settings = { ...DEFAULT_QUERY_SETTINGS, ...req.settings ?? {} };
   const allPaths = [...req.files.map((f) => f.path), ...req.attachments, ...req.paths ?? []];
   const vault = buildVault(allPaths);
@@ -12793,18 +12805,18 @@ async function main() {
     for (const l2 of meta.links) rl[l2.path] = (rl[l2.path] ?? 0) + 1;
     resolvedLinks[f.path] = rl;
   }
-  const out = [];
+  const out = (res) => process.stdout.write(JSON.stringify(res) + "\n");
   for (const r of req.requests) {
     try {
       if (r.kind === "inline") {
         const field = EXPRESSION.field.tryParse(r.source);
         const res = executeInline(field, r.origin, index, settings);
-        out.push(res.successful ? { id: r.id, ok: true, value: encode(res.value, settings) } : { id: r.id, ok: false, error: res.error });
+        out(res.successful ? { id: r.id, ok: true, value: encode(res.value, settings) } : { id: r.id, ok: false, error: res.error });
         continue;
       }
       const q = parseQuery(r.source);
       if (!q.successful) {
-        out.push({ id: r.id, ok: false, error: q.error });
+        out({ id: r.id, ok: false, error: q.error });
         continue;
       }
       const query = q.value;
@@ -12812,10 +12824,10 @@ async function main() {
         case "table": {
           const res = await executeTable(query, index, r.origin, settings);
           if (!res.successful) {
-            out.push({ id: r.id, ok: false, error: res.error });
+            out({ id: r.id, ok: false, error: res.error });
             break;
           }
-          out.push({
+          out({
             id: r.id,
             ok: true,
             type: "table",
@@ -12829,10 +12841,10 @@ async function main() {
         case "list": {
           const res = await executeList(query, index, r.origin, settings);
           if (!res.successful) {
-            out.push({ id: r.id, ok: false, error: res.error });
+            out({ id: r.id, ok: false, error: res.error });
             break;
           }
-          out.push({
+          out({
             id: r.id,
             ok: true,
             type: "list",
@@ -12844,20 +12856,19 @@ async function main() {
         case "task": {
           const res = await executeTask(query, r.origin, index, settings);
           if (!res.successful) {
-            out.push({ id: r.id, ok: false, error: res.error });
+            out({ id: r.id, ok: false, error: res.error });
             break;
           }
-          out.push({ id: r.id, ok: true, type: "task", tasks: encodeGrouping(res.value.tasks, settings) });
+          out({ id: r.id, ok: true, type: "task", tasks: encodeGrouping(res.value.tasks, settings) });
           break;
         }
         default:
-          out.push({ id: r.id, ok: false, unsupported: true, error: `${query.header.type} queries are not supported` });
+          out({ id: r.id, ok: false, unsupported: true, error: `${query.header.type} queries are not supported` });
       }
     } catch (e) {
-      out.push({ id: r.id, ok: false, error: String(e?.message ?? e) });
+      out({ id: r.id, ok: false, error: String(e?.message ?? e) });
     }
   }
-  process.stdout.write(JSON.stringify({ results: out }));
 }
 main().catch((e) => {
   process.stderr.write(String(e?.stack ?? e));

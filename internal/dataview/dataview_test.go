@@ -2,6 +2,8 @@ package dataview
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -121,5 +123,34 @@ func TestLoadSettings(t *testing.T) {
 	s, err = LoadSettings(t.TempDir())
 	if err != nil || len(s) != 0 {
 		t.Errorf("missing settings %v %v", s, err)
+	}
+}
+
+// A request bigger than V8's longest string (~512 MiB) once failed with
+// "Cannot create a string longer than 0x1fffffe8 characters" (2026-11-19, a
+// vault of ~32,000 published notes). Opt-in: it needs about 2 GiB of memory.
+func TestRunLargerThanNodeString(t *testing.T) {
+	if os.Getenv("DATAVIEW_LARGE_TEST") == "" {
+		t.Skip("set DATAVIEW_LARGE_TEST=1 to run")
+	}
+	e := needNode(t)
+	var base File
+	for _, f := range FilesFromIndex(fixture(t), nil) {
+		if f.Path == "Town/Issues/Road Repair.md" {
+			base = f
+		}
+	}
+	base.Content += "\n" + strings.Repeat("x", 1<<20) + "\n" // after all metadata positions
+	files := make([]File, 600)                               // ~600 MiB of content
+	for i := range files {
+		files[i] = base
+		files[i].Path = fmt.Sprintf("n/%04d.md", i)
+	}
+	res, err := e.Run(files, []Request{{ID: "q", Kind: "query", Origin: "n/0000.md", Source: `LIST FROM "n" WHERE status = "open"`}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q := res["q"]; !q.OK || len(q.Items) != len(files) {
+		t.Fatalf("q ok=%v items=%d err=%q", q.OK, len(q.Items), q.Error)
 	}
 }
